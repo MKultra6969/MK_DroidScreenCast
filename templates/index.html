@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MK DroidScreenCast - Web Panel</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+    <div class="background-animation"></div>
+    
+    <div class="container">
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <i data-lucide="smartphone" style="width: 48px; height: 48px; color: #A8C7FA;"></i>
+                    <div>
+                        <h1>MK DroidScreenCast</h1>
+                        <p class="subtitle">Web Panel для управления Android устройствами</p>
+                    </div>
+                </div>
+                <div class="status-container">
+                    <span class="status-badge" id="wsStatus">
+                        <span class="status-dot"></span>
+                        WebSocket
+                    </span>
+                </div>
+            </div>
+        </header>
+
+        <div class="grid">
+            <div class="card">
+                <div class="card-header">
+                    <i data-lucide="activity"></i>
+                    <h2>Активные устройства</h2>
+                </div>
+                <div class="card-body" id="activeDevices">
+                    <div class="loading-spinner"></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <i data-lucide="save"></i>
+                    <h2>Сохраненные устройства</h2>
+                </div>
+                <div class="card-body" id="savedDevices">
+                    <div class="loading-spinner"></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <i data-lucide="zap"></i>
+                    <h2>Быстрое подключение</h2>
+                </div>
+                <div class="card-body">
+                    <div class="form-group">
+                        <label>
+                            <i data-lucide="link" style="width: 16px; height: 16px;"></i>
+                            IP адрес:порт
+                        </label>
+                        <input type="text" id="quickConnectAddress" placeholder="192.168.1.100:5555" class="input-field">
+                    </div>
+                    <button class="btn btn-primary" onclick="quickConnect()">
+                        <i data-lucide="plug-zap"></i>
+                        Подключиться
+                    </button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <i data-lucide="wifi"></i>
+                    <h2>Wireless Pairing</h2>
+                </div>
+                <div class="card-body">
+                    <p class="card-description">Для Android 11+</p>
+                    <div class="form-group">
+                        <label>Адрес сопряжения</label>
+                        <input type="text" id="pairAddress" placeholder="192.168.1.100:12345" class="input-field">
+                    </div>
+                    <div class="form-group">
+                        <label>6-значный код</label>
+                        <input type="text" id="pairCode" placeholder="123456" maxlength="6" class="input-field">
+                    </div>
+                    <button class="btn btn-primary" onclick="pairDevice()">
+                        <i data-lucide="key"></i>
+                        Выполнить сопряжение
+                    </button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <i data-lucide="refresh-cw"></i>
+                    <h2>USB → Wi-Fi</h2>
+                </div>
+                <div class="card-body">
+                    <p class="card-description">Подключите устройство через USB</p>
+                    <div class="form-group">
+                        <label>Порт</label>
+                        <input type="text" id="tcpipPort" value="5555" class="input-field">
+                    </div>
+                    <button class="btn btn-primary" onclick="enableTcpip()">
+                        <i data-lucide="power"></i>
+                        Включить tcpip
+                    </button>
+                </div>
+            </div>
+
+<div class="card card-large">
+    <div class="card-header">
+        <i data-lucide="monitor"></i>
+        <h2>Запуск scrcpy</h2>
+    </div>
+    <div class="card-body">
+        <div class="form-group">
+            <label><i data-lucide="settings-2" style="width: 16px; height: 16px;"></i> Пресеты качества</label>
+            <select id="scrcpyPreset" class="input-field" onchange="applyPreset()">
+                <option value="custom">Custom (Свой)</option>
+                <option value="1080p" selected>FullHD (1080p / 8 Mbps)</option>
+                <option value="2k">2K (1440p / 16 Mbps)</option>
+                <option value="4k">4K (2160p / 32 Mbps)</option>
+            </select>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label><i data-lucide="video" style="width: 16px; height: 16px;"></i> Битрейт (Mbps)</label>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <input type="number" id="bitrateNum" value="8" min="1" max="100" class="input-field" oninput="syncBitrate('num')">
+                    <span style="font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant);">Mbps</span>
+                </div>
+                <input type="hidden" id="bitrate" value="8M"> 
+            </div>
+            
+            <div class="form-group">
+                <label><i data-lucide="maximize" style="width: 16px; height: 16px;"></i> Макс. размер (px)</label>
+                <input type="number" id="maxsize" value="1080" class="input-field">
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>Клавиатура</label>
+                <select id="keyboard" class="input-field">
+                    <option value="uhid">UHID (Rec. Android 9+)</option>
+                    <option value="sdk">SDK (Basic)</option>
+                    <option value="aoa">AOA (USB Only)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Режим</label>
+                <select id="connection" class="input-field">
+                    <option value="">Авто</option>
+                    <option value="usb">USB</option>
+                    <option value="wifi">Wi-Fi</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="checkbox-group">
+            <label class="checkbox-label">
+                <input type="checkbox" id="stayAwake">
+                <i data-lucide="coffee" style="width: 18px; height: 18px;"></i> Не гасить экран
+            </label>
+            <label class="checkbox-label">
+                <input type="checkbox" id="showTouches">
+                <i data-lucide="hand" style="width: 18px; height: 18px;"></i> Показать нажатия
+            </label>
+            <label class="checkbox-label">
+                <input type="checkbox" id="fullscreen">
+                <i data-lucide="maximize-2" style="width: 18px; height: 18px;"></i> На весь экран
+            </label>
+             <label class="checkbox-label">
+                <input type="checkbox" id="noAudio">
+                <i data-lucide="volume-x" style="width: 18px; height: 18px;"></i> Без звука
+            </label>
+        </div>
+
+        <button class="btn btn-success btn-large" onclick="launchScrcpy()">
+            <i data-lucide="play"></i> Запустить scrcpy
+        </button>
+    </div>
+</div>
+
+        </div>
+        <footer class="footer">
+            <p>Copyright 2025 WTFPL</p>
+            <div class="footer-links">
+                <a href="https://github.com/MKultra6969" target="_blank" class="footer-link">
+                    <i data-lucide="github" style="width: 16px; height: 16px;"></i> Github
+                </a>
+                <a href="https://t.me/MKextera" target="_blank" class="footer-link">
+                    <i data-lucide="send" style="width: 16px; height: 16px;"></i> Telegram channel
+                </a>
+            </div>
+        </footer>
+
+    </div>
+
+    <script src="/static/js/app.js"></script>
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>
