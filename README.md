@@ -140,7 +140,7 @@ MK_droidScreenCast/
 **MKultra69**
 
 *   GitHub: [@MKultra6969](https://github.com/MKultra6969)
-*   Telegram Channel: [@MKextera](https://t.me/MKextera)
+*   Telegram Channel: [@MKplusULTRA](https://t.me/MKplusULTRA)
 
 ## P.S.
 * Все очевидно, лицензия как всегда, отношение к людям как всегда.
