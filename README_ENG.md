@@ -28,7 +28,8 @@ Modes:
 
 ## Interface
 
-> <img width="3838" height="1840" alt="screenshot" src="https://github.com/user-attachments/assets/e83c7060-2964-4dd9-b4f1-c3e1e471a38b" />
+<img width="3840" height="2100" alt="showcase" src="https://github.com/user-attachments/assets/bf3c59fb-137c-48ce-8a27-f6a4b6339407" />
+
 
 ---
 
@@ -157,3 +158,4 @@ MK_droidScreenCast/
 
 ## P.S.
 * Everything is obvious, license as always, attitude to people as always.
+
