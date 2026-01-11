@@ -1,3 +1,4 @@
+[🇺🇸English](https://github.com/MKultra6969/MK_DroidScreenCast/blob/main/README_ENG.md)
 <div align="center">
 
 # 📱 MK DroidScreenCast v0.1.0
