@@ -28,6 +28,8 @@
 
 ## 🎨 Интерфейс
 
+<img width="3840" height="2100" alt="showcase" src="https://github.com/user-attachments/assets/729c8841-87b2-4e97-9514-c33c6a8ac0d8" />
+
 
 ---
 
