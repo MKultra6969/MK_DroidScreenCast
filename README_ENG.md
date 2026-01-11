@@ -1,3 +1,4 @@
+[🇷🇺Русский](https://github.com/MKultra6969/MK_DroidScreenCast/blob/main/README.md)
 <div align="center">
 
 # MK DroidScreenCast v0.1.0
@@ -28,8 +29,7 @@ Modes:
 
 ## Interface
 
-<img width="3840" height="2100" alt="showcase" src="https://github.com/user-attachments/assets/bf3c59fb-137c-48ce-8a27-f6a4b6339407" />
-
+> <img width="3840" height="2100" alt="showcase" src="https://github.com/user-attachments/assets/bf3c59fb-137c-48ce-8a27-f6a4b6339407" />
 
 ---
 
@@ -158,4 +158,3 @@ MK_droidScreenCast/
 
 ## P.S.
 * Everything is obvious, license as always, attitude to people as always.
-

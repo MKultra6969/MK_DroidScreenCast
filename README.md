@@ -1,3 +1,4 @@
+[🇺🇸English](https://github.com/MKultra6969/MK_DroidScreenCast/blob/main/README_ENG.md)
 <div align="center">
 
 # 📱 MK DroidScreenCast v0.1.0
@@ -28,8 +29,7 @@
 
 ## 🎨 Интерфейс
 
-<img width="3840" height="2100" alt="showcase" src="https://github.com/user-attachments/assets/729c8841-87b2-4e97-9514-c33c6a8ac0d8" />
-
+> <img width="3840" height="2100" alt="showcase" src="https://github.com/user-attachments/assets/bf3c59fb-137c-48ce-8a27-f6a4b6339407" />
 
 ---
 
