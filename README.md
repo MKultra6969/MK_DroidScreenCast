@@ -1,7 +1,7 @@
 [🇺🇸English](https://github.com/MKultra6969/MK_DroidScreenCast/blob/main/README_ENG.md)
 <div align="center">
 
-# 📱 MK DroidScreenCast v0.1.0
+# 📱 MK DroidScreenCast v1.0.0
 
 **Универсальный менеджер Android-устройств на базе ADB и Scrcpy**
 <br>
@@ -10,7 +10,7 @@
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-Web_Panel-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Scrcpy](https://img.shields.io/badge/Powered_by-Scrcpy-green?style=for-the-badge&logo=android)](https://github.com/Genymobile/scrcpy)
-[![Version](https://img.shields.io/badge/Version-0.1.0-2ea44f?style=for-the-badge)](#)
+[![Version](https://img.shields.io/badge/Version-1.0.0-2ea44f?style=for-the-badge)](#)
 [![License](https://img.shields.io/badge/License-WTFPL-red?style=for-the-badge)](http://www.wtfpl.net/)
 
 </div>
