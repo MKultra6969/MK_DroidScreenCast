@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyd
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.venv.bak/
+.venv_backup/
+
+# Node / Vite
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+.vite/
+.cache/
+frontend/dist-tauri/
+
+# Runtime artifacts
+logs/*.log
+logs/*.zip
+logs/*.txt
+*.log
+downloads/
+recordings/
+screenshots/
+BACKUP/
+bin/
+!bin/.keep
+
+# Tauri / Rust
+src-tauri/target/
+
+# Environment files
+.env
+.env.*
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.iml

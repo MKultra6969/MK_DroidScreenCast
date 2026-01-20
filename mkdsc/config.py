@@ -19,6 +19,25 @@ DEFAULT_CONFIG = {
         "port": 6969,
         "auto_open": True,
     },
+    "logs": {
+        "export_dir": "",
+    },
+    "downloads": {
+        "base_dir": "",
+    },
+    "connection_optimizer": {
+        "auto_switch": False,
+    },
+    "recording": {
+        "output_dir": "",
+        "format": "mp4",
+        "audio_source": "output",
+        "file_prefix": "recording",
+        "show_preview": True,
+        "stay_awake": False,
+        "show_touches": False,
+        "turn_screen_off": False,
+    },
     "cli": {
         "show_banner": True,
     },
@@ -84,6 +103,40 @@ def _migrate_config(config):
         config["last_update_check"] = None
         changed = True
 
+    logs_config = config.get("logs")
+    if not isinstance(logs_config, dict):
+        config["logs"] = {"export_dir": ""}
+        changed = True
+    elif "export_dir" not in logs_config:
+        logs_config["export_dir"] = ""
+        changed = True
+
+    downloads_config = config.get("downloads")
+    if not isinstance(downloads_config, dict):
+        config["downloads"] = {"base_dir": ""}
+        changed = True
+    elif "base_dir" not in downloads_config:
+        downloads_config["base_dir"] = ""
+        changed = True
+
+    connection_cfg = config.get("connection_optimizer")
+    if not isinstance(connection_cfg, dict):
+        config["connection_optimizer"] = {"auto_switch": False}
+        changed = True
+    elif "auto_switch" not in connection_cfg:
+        connection_cfg["auto_switch"] = False
+        changed = True
+
+    recording_config = config.get("recording")
+    if not isinstance(recording_config, dict):
+        config["recording"] = deepcopy(DEFAULT_CONFIG["recording"])
+        changed = True
+    else:
+        for key, value in DEFAULT_CONFIG["recording"].items():
+            if key not in recording_config:
+                recording_config[key] = value
+                changed = True
+
     return config, changed
 
 
@@ -103,6 +156,7 @@ def load_config():
 
 
 def save_config(config):
+    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     CONFIG_PATH.write_text(
         json.dumps(config, indent=2, ensure_ascii=False),
         encoding="utf-8",

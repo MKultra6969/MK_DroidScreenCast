@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a problem with MK DroidScreenCast
+description: Report a problem with the MK DroidScreenCast app
 title: "[Bug]: "
 labels: [bug]
 body:
@@ -7,8 +7,17 @@ body:
     id: version
     attributes:
       label: App version
-      description: Copy from the CLI header or logs.
-      placeholder: v0.1.0
+      description: From Settings > About (or the window title).
+      placeholder: 1.0.0
+    validations:
+      required: true
+  - type: dropdown
+    id: install_type
+    attributes:
+      label: Install type
+      options:
+        - Release build (GitHub Releases)
+        - Development build (from source)
     validations:
       required: true
   - type: input
@@ -16,6 +25,25 @@ body:
     attributes:
       label: OS
       placeholder: Windows 11 23H2
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Android device
+      description: Model and Android version.
+      placeholder: Pixel 7, Android 14
+    validations:
+      required: true
+  - type: dropdown
+    id: connection
+    attributes:
+      label: Connection
+      options:
+        - USB
+        - Wi-Fi (pairing)
+        - Wi-Fi (tcpip)
+        - Mixed / auto
     validations:
       required: true
   - type: textarea
@@ -51,4 +79,4 @@ body:
     id: logs
     attributes:
       label: Logs bundle
-      description: Drag and drop logs.zip from the web panel diagnostics.
+      description: Attach logs.zip from Settings > Diagnostics > Download logs.

@@ -1,16 +1,16 @@
 [🇷🇺Русский](https://github.com/MKultra6969/MK_DroidScreenCast/blob/main/README.md)
 <div align="center">
 
-# MK DroidScreenCast v0.1.0
+# MK DroidScreenCast v1.0.0
 
-**Universal Android device manager built on ADB and Scrcpy**
+**Desktop Android control center built on ADB and Scrcpy**
 <br>
-*Control your phone from a PC over USB or Wi-Fi using the CLI or the Web panel.*
+*Connect, mirror, record, and manage devices from one native app.*
 
-[![Python](https://img.shields.io/badge/Python-3.8%2B-blue?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-Web_Panel-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Tauri](https://img.shields.io/badge/Tauri-Desktop-24C8DB?style=for-the-badge&logo=tauri&logoColor=white)](https://tauri.app/)
 [![Scrcpy](https://img.shields.io/badge/Powered_by-Scrcpy-green?style=for-the-badge&logo=android)](https://github.com/Genymobile/scrcpy)
-[![Version](https://img.shields.io/badge/Version-0.1.0-2ea44f?style=for-the-badge)](#)
+[![Version](https://img.shields.io/badge/Version-1.0.0-2ea44f?style=for-the-badge)](#)
 [![License](https://img.shields.io/badge/License-WTFPL-red?style=for-the-badge)](http://www.wtfpl.net/)
 
 </div>
@@ -19,123 +19,74 @@
 
 ## About
 
-MK DroidScreenCast is a wrapper around `adb` and `scrcpy` that simplifies connecting and mirroring Android devices on a PC. The app prepares its runtime, downloads the required tools, and provides both CLI and Web interfaces.
-
-Modes:
-1.  CLI: interactive terminal flow with connection and scrcpy settings.
-2.  Web Panel: browser UI with live device status and presets.
+MK DroidScreenCast is a full desktop application that wraps `adb` and `scrcpy` with a focused UI. It runs a local backend, handles tool downloads, and keeps everything inside a single app window.
 
 ---
 
 ## Interface
 
-> <img width="3840" height="2100" alt="showcase" src="https://github.com/user-attachments/assets/bf3c59fb-137c-48ce-8a27-f6a4b6339407" />
+> <img width="2490" height="1312" alt="showcase" src="https://github.com/user-attachments/assets/2d5e608a-a59e-494e-bb03-e8499dd1f990" />
 
 ---
 
 ## Features
 
-### Setup
-*   Auto bootstrap: `gateway.py` creates `.venv` and installs dependencies on first run.
-*   Auto download: grabs platform-tools (ADB) and Scrcpy for your OS.
+### Devices
+*   USB, Wi-Fi pairing (Android 11+), USB to Wi-Fi (TCP/IP).
+*   Saved devices and quick connect.
+*   Auto connection preference.
 
-### Connections
-*   USB connection.
-*   Wireless pairing (Android 11+).
-*   USB -> Wi-Fi (TCP/IP mode).
-*   Saved devices list for quick reconnect.
+### Scrcpy + Recording
+*   Presets for bitrate and max size.
+*   Keyboard modes and common toggles (stay awake, show touches, fullscreen, no audio, turn screen off).
+*   Recording HUD with format, audio source, and output folder.
 
-### Scrcpy
-*   Quality presets: 1080p, 2K, 4K, or custom.
-*   Bitrate and max size controls.
-*   Keyboard modes: `UHID`, `SDK`, `AOA`.
-*   Options: keep screen awake, show touches, turn screen off, fullscreen, no audio.
-
-### Web Panel
-*   Live updates via WebSocket.
-*   Device and preset management.
-*   Start scrcpy from the browser.
-*   Diagnostics: download `logs.zip` and check updates.
-*   Language switcher: EN/RU.
+### Files + Diagnostics
+*   File manager (push/pull) and screenshot gallery.
+*   Export `logs.zip` and check for updates.
+*   Config editor and RU/EN UI.
 
 ---
 
 ## Installation
 
-### Requirements
-*   Python 3.8 or newer.
-*   Windows, Linux, or macOS.
+### Release build
+1.  Download the latest installer from GitHub Releases: https://github.com/MKultra6969/MK_DroidScreenCast/releases
+2.  Install and launch MK DroidScreenCast.
 
-### Quick start
-
-1.  **Clone the repo:**
-    ```bash
-    git clone https://github.com/MKultra6969/MK_DroidScreenCast
-    cd MK_DroidScreenCast
-    ```
-
-2.  **Run the app:**
-    ```bash
-    python gateway.py
-    ```
-
-On first run it will create `.venv`, install dependencies, and download ADB/Scrcpy.
-
-### Manual setup (optional)
-
-```bash
-python -m venv .venv
-.\.venv\Scripts\activate
-pip install -r requirements.txt
-```
+### Build from source
+See `docs/build.md` for prerequisites (Node 18+, Rust, Python 3.10+) and build commands.
 
 ---
 
 ## Usage
 
-Main menu:
-
-```bash
-python gateway.py
-```
-
-Choose a mode:
-
-### 1. CLI Mode
-Follow the prompts for connection and scrcpy settings.
-
-### 2. Web Panel
-*   Open: `http://localhost:6969`
-*   Manage devices and launch scrcpy from the browser.
-
-Alternative entry points:
-```bash
-python screencast.py
-python web_panel.py
-```
+1.  Open MK DroidScreenCast.
+2.  Connect your device via USB or Wi-Fi pairing.
+3.  Pick a scrcpy preset and start mirroring.
+4.  Use Recording, Files, and Diagnostics as needed.
 
 ---
 
 ## Configuration
 
-Settings live in `config.json` (language, presets, and web panel settings). Edit it while the app is closed.
+Settings live in `config.json` and can be edited in-app under Settings > Config.
 
 ---
 
 ## Project structure
 
 ```text
-MK_droidScreenCast/
-├── mkdsc/              # Core logic (CLI, web, tools)
-├── templates/          # HTML templates
-├── static/             # CSS, JS and web assets
-├── downloads/          # ADB/Scrcpy and updates
-├── logs/               # Logs and diagnostics
-├── config.json         # Configuration and saved devices
-├── gateway.py          # Bootstrap launcher
-├── screencast.py       # CLI-only entry point
-├── web_panel.py        # Web-only entry point
-└── requirements.txt    # Python dependencies
+MK_DroidScreenCast/
+├── frontend/          # Desktop UI (Tauri)
+├── src-tauri/         # Rust shell
+├── mkdsc/             # Python backend (ADB/Scrcpy logic)
+├── bin/               # Bundled backend binaries
+├── downloads/         # ADB/Scrcpy cache
+├── logs/              # Logs and diagnostics
+├── config.json        # App settings
+├── tauri_backend.py   # Backend entry point
+└── docs/              # Build notes
 ```
 
 ---

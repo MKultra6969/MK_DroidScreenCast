@@ -1,349 +1,44 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MK DroidScreenCast - Web Panel</title>
-    <link rel="stylesheet" href="/static/css/style.css">
-    <script src="https://unpkg.com/lucide@latest"></script>
-</head>
-<body>
-    <div class="background">
-        <div class="orb orb-1"></div>
-        <div class="orb orb-2"></div>
-        <div class="grid-overlay"></div>
-    </div>
-
-    <div class="page">
-        <header class="hero reveal" style="--delay: 0ms;">
-            <div class="hero-main">
-                <div class="brand">
-                    <div class="brand-icon">
-                        <i data-lucide="smartphone" style="width: 36px; height: 36px;"></i>
-                    </div>
-                    <div>
-                        <h1 data-i18n="title">MK DroidScreenCast</h1>
-                        <p data-i18n="subtitle" class="muted">Web control center for Android mirroring</p>
-                    </div>
-                </div>
-                <div class="hero-actions">
-                    <div class="status-badge" id="wsStatus">
-                        <span class="status-dot"></span>
-                        <span data-i18n="status_online">WebSocket online</span>
-                    </div>
-                    <div class="lang-select">
-                        <label data-i18n="language_label" for="langSelect">Language</label>
-                        <select id="langSelect" class="input-field small"></select>
-                    </div>
-                    <div class="theme-toggle">
-                        <span data-i18n="theme_label">Theme</span>
-                        <button class="theme-button" id="themeToggle" type="button" aria-pressed="false">
-                            <i data-lucide="moon"></i>
-                            <span id="themeToggleLabel">Dark</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </header>
-
-        <main class="content">
-            <section class="card wide reveal" style="--delay: 80ms;">
-                <div class="card-header">
-                    <i data-lucide="sparkles"></i>
-                    <h2 data-i18n="section_faq">Quick guide</h2>
-                </div>
-                <div class="card-body">
-                    <p class="card-description" data-i18n="faq_intro">Get started in a few steps</p>
-                    <div class="faq">
-                        <details open>
-                            <summary data-i18n="faq_step1_title">Enable developer options</summary>
-                            <p data-i18n="faq_step1_body">Tap Build Number 7 times in Settings -> About phone.</p>
-                        </details>
-                        <details>
-                            <summary data-i18n="faq_step2_title">Enable USB debugging</summary>
-                            <p data-i18n="faq_step2_body">Settings -> Developer options -> USB debugging.</p>
-                        </details>
-                        <details>
-                            <summary data-i18n="faq_step3_title">Wireless debugging</summary>
-                            <p data-i18n="faq_step3_body">Developer options -> Wireless debugging -> Pair device.</p>
-                        </details>
-                        <details>
-                            <summary data-i18n="faq_step4_title">Authorize this PC</summary>
-                            <p data-i18n="faq_step4_body">Accept the RSA prompt on the phone when connecting.</p>
-                        </details>
-                    </div>
-                </div>
-            </section>
-
-            <section class="grid">
-                <article class="card reveal" style="--delay: 140ms;">
-                    <div class="card-header">
-                        <i data-lucide="activity"></i>
-                        <h2 data-i18n="section_active_devices">Active devices</h2>
-                    </div>
-                    <div class="card-body" id="activeDevices">
-                        <div class="loading-spinner"></div>
-                    </div>
-                </article>
-
-                <article class="card reveal" style="--delay: 200ms;">
-                    <div class="card-header">
-                        <i data-lucide="save"></i>
-                        <h2 data-i18n="section_saved_devices">Saved devices</h2>
-                    </div>
-                    <div class="card-body">
-                        <div class="form-group">
-                            <label data-i18n="device_save_name_label">Device name</label>
-                            <input type="text" id="saveDeviceName" class="input-field" data-i18n-placeholder="device_save_name_placeholder" placeholder="Test phone">
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label data-i18n="device_save_ip_label">IP address</label>
-                                <input type="text" id="saveDeviceIp" class="input-field" placeholder="192.168.1.100">
-                            </div>
-                            <div class="form-group">
-                                <label data-i18n="device_save_port_label">Port</label>
-                                <input type="text" id="saveDevicePort" class="input-field" value="5555">
-                            </div>
-                        </div>
-                        <button class="btn btn-secondary" id="saveDeviceBtn">
-                            <i data-lucide="save"></i>
-                            <span data-i18n="device_save_button">Save device</span>
-                        </button>
-                        <div id="savedDevices">
-                            <div class="loading-spinner"></div>
-                        </div>
-                    </div>
-                </article>
-
-                <article class="card reveal" style="--delay: 260ms;">
-                    <div class="card-header">
-                        <i data-lucide="zap"></i>
-                        <h2 data-i18n="section_quick_connect">Quick connect</h2>
-                    </div>
-                    <div class="card-body">
-                        <div class="form-group">
-                            <label data-i18n="quick_connect_label">IP address:port</label>
-                            <input type="text" id="quickConnectAddress" data-i18n-placeholder="quick_connect_placeholder" placeholder="192.168.1.100:5555" class="input-field">
-                        </div>
-                        <button class="btn btn-primary" id="quickConnectBtn">
-                            <i data-lucide="plug-zap"></i>
-                            <span data-i18n="quick_connect_button">Connect</span>
-                        </button>
-                    </div>
-                </article>
-
-                <article class="card reveal" style="--delay: 320ms;">
-                    <div class="card-header">
-                        <i data-lucide="wifi"></i>
-                        <h2 data-i18n="section_pairing">Wireless pairing</h2>
-                    </div>
-                    <div class="card-body">
-                        <p class="card-description" data-i18n="pairing_note">Android 11+ only</p>
-                        <div class="form-group">
-                            <label data-i18n="pair_address_label">Pairing address</label>
-                            <input type="text" id="pairAddress" placeholder="192.168.1.100:12345" class="input-field">
-                        </div>
-                        <div class="form-group">
-                            <label data-i18n="pair_code_label">6-digit code</label>
-                            <input type="text" id="pairCode" placeholder="123456" maxlength="6" class="input-field">
-                        </div>
-                        <button class="btn btn-primary" id="pairBtn">
-                            <i data-lucide="key"></i>
-                            <span data-i18n="pair_button">Pair device</span>
-                        </button>
-                    </div>
-                </article>
-
-                <article class="card reveal" style="--delay: 380ms;">
-                    <div class="card-header">
-                        <i data-lucide="refresh-cw"></i>
-                        <h2 data-i18n="section_usb_wifi">USB to Wi-Fi</h2>
-                    </div>
-                    <div class="card-body">
-                        <p class="card-description" data-i18n="usb_wifi_note">Enable TCP/IP over USB</p>
-                        <div class="form-group">
-                            <label data-i18n="usb_wifi_port_label">Port</label>
-                            <input type="text" id="tcpipPort" value="5555" class="input-field">
-                        </div>
-                        <button class="btn btn-primary" id="tcpipBtn">
-                            <i data-lucide="power"></i>
-                            <span data-i18n="usb_wifi_button">Enable tcpip</span>
-                        </button>
-                    </div>
-                </article>
-            </section>
-
-            <section class="card wide reveal" style="--delay: 440ms;">
-                <div class="card-header">
-                    <i data-lucide="monitor"></i>
-                    <h2 data-i18n="section_scrcpy">Launch scrcpy</h2>
-                </div>
-                <div class="card-body">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label data-i18n="scrcpy_preset_label">Preset</label>
-                            <select id="scrcpyPreset" class="input-field"></select>
-                        </div>
-                        <div class="form-group">
-                            <label data-i18n="scrcpy_keyboard_label">Keyboard</label>
-                            <select id="keyboard" class="input-field">
-                                <option value="uhid">UHID</option>
-                                <option value="sdk">SDK</option>
-                                <option value="aoa">AOA</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label data-i18n="scrcpy_connection_label">Connection</label>
-                            <select id="connection" class="input-field">
-                                <option value="" data-i18n="connection_any">Auto</option>
-                                <option value="usb" data-i18n="connection_usb">USB</option>
-                                <option value="wifi" data-i18n="connection_wifi">Wi-Fi</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label data-i18n="scrcpy_device_label">Device</label>
-                            <select id="scrcpyDevice" class="input-field"></select>
-                        </div>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label data-i18n="scrcpy_bitrate_label">Video bitrate (Mbps)</label>
-                            <input type="number" id="bitrateNum" value="8" min="1" max="100" class="input-field">
-                        </div>
-                        <div class="form-group">
-                            <label data-i18n="scrcpy_maxsize_label">Max size (px)</label>
-                            <input type="number" id="maxsize" value="1080" class="input-field">
-                        </div>
-                    </div>
-
-                    <div class="checkbox-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="stayAwake">
-                            <span data-i18n="scrcpy_stay_awake">Keep screen awake</span>
-                        </label>
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="showTouches">
-                            <span data-i18n="scrcpy_show_touches">Show touches</span>
-                        </label>
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="turnScreenOff">
-                            <span data-i18n="scrcpy_turn_screen_off">Turn screen off</span>
-                        </label>
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="fullscreen">
-                            <span data-i18n="scrcpy_fullscreen">Fullscreen</span>
-                        </label>
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="noAudio">
-                            <span data-i18n="scrcpy_no_audio">No audio</span>
-                        </label>
-                    </div>
-
-                    <button class="btn btn-success btn-large" id="launchScrcpyBtn">
-                        <i data-lucide="play"></i>
-                        <span data-i18n="scrcpy_launch_button">Start scrcpy</span>
-                    </button>
-                </div>
-            </section>
-
-            <section class="grid">
-                <article class="card reveal" style="--delay: 500ms;">
-                    <div class="card-header">
-                        <i data-lucide="bookmark"></i>
-                        <h2 data-i18n="section_presets">Save preset</h2>
-                    </div>
-                    <div class="card-body">
-                        <div class="form-group">
-                            <label data-i18n="preset_name_label">Preset name</label>
-                            <input type="text" id="presetName" class="input-field" data-i18n-placeholder="preset_name_placeholder" placeholder="Studio desk">
-                        </div>
-                        <button class="btn btn-secondary" id="savePresetBtn">
-                            <i data-lucide="save"></i>
-                            <span data-i18n="preset_save_button">Save preset</span>
-                        </button>
-                        <div class="preset-list">
-                            <h3 data-i18n="preset_list_title">Saved presets</h3>
-                            <div id="presetList"></div>
-                        </div>
-                    </div>
-                </article>
-
-                <article class="card compact reveal" style="--delay: 560ms;">
-                    <div class="card-header">
-                        <i data-lucide="shield-check"></i>
-                        <h2 data-i18n="section_diagnostics">Diagnostics</h2>
-                    </div>
-                    <div class="card-body diagnostics-body">
-                        <p class="card-description" data-i18n="diagnostics_note">Generate a shareable bundle for troubleshooting.</p>
-                        <div class="diagnostics-actions">
-                            <button class="btn btn-primary" id="downloadLogsBtn">
-                                <i data-lucide="download"></i>
-                                <span data-i18n="download_logs">Download logs.zip</span>
-                            </button>
-                            <button class="btn btn-secondary" id="checkUpdatesBtn">
-                                <i data-lucide="refresh-cw"></i>
-                                <span data-i18n="update_check_button">Check updates</span>
-                            </button>
-                        </div>
-                    </div>
-                </article>
-            </section>
-
-        </main>
-
-        <footer class="footer">
-            <p data-i18n="footer_notice">WTFPL 2026</p>
-            <div class="footer-links">
-                <a href="https://github.com/MKultra6969" target="_blank" class="footer-link">
-                    <i data-lucide="github" style="width: 16px; height: 16px;"></i> GitHub
-                </a>
-                <a href="https://t.me/MKplusULTRA" target="_blank" class="footer-link">
-                    <i data-lucide="send" style="width: 16px; height: 16px;"></i> Telegram
-                </a>
-            </div>
-        </footer>
-    </div>
-
-    <div class="modal-overlay" id="firstRunModal" aria-hidden="true">
-        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="firstRunTitle">
-            <button class="modal-close" id="firstRunClose" type="button" aria-label="Close">
-                <i data-lucide="x"></i>
-            </button>
-            <div class="modal-header">
-                <i data-lucide="sparkles"></i>
-                <h2 id="firstRunTitle" data-i18n="first_run_title">Quick start</h2>
-            </div>
-            <p class="modal-intro" data-i18n="first_run_intro">Prepare your phone for the first connection.</p>
-            <div class="guide-steps">
-                <div class="guide-step">
-                    <h3 data-i18n="faq_step1_title">Enable developer options</h3>
-                    <p data-i18n="faq_step1_body">Tap Build Number 7 times in Settings -> About phone.</p>
-                </div>
-                <div class="guide-step">
-                    <h3 data-i18n="faq_step2_title">Enable USB debugging</h3>
-                    <p data-i18n="faq_step2_body">Settings -> Developer options -> USB debugging.</p>
-                </div>
-                <div class="guide-step">
-                    <h3 data-i18n="faq_step3_title">Wireless debugging</h3>
-                    <p data-i18n="faq_step3_body">Developer options -> Wireless debugging -> Pair device.</p>
-                </div>
-                <div class="guide-step">
-                    <h3 data-i18n="faq_step4_title">Authorize this PC</h3>
-                    <p data-i18n="faq_step4_body">Accept the RSA prompt on the phone when connecting.</p>
-                </div>
-            </div>
-            <button class="btn btn-primary modal-action" id="firstRunDone">
-                <i data-lucide="check"></i>
-                <span data-i18n="first_run_button">Got it</span>
-            </button>
-        </div>
-    </div>
-
-    <script src="/static/js/app.js"></script>
-    <script>
-        lucide.createIcons();
-    </script>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MK DroidScreenCast</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 40px;
+        color: #111;
+        background: #f6f6f6;
+      }
+      main {
+        max-width: 720px;
+        margin: 0 auto;
+        background: #fff;
+        padding: 24px;
+        border-radius: 12px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+      }
+      h1 {
+        margin: 0 0 12px 0;
+        font-size: 22px;
+      }
+      p {
+        margin: 0 0 12px 0;
+        line-height: 1.4;
+      }
+      code {
+        background: #f0f0f0;
+        padding: 2px 6px;
+        border-radius: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>MK DroidScreenCast</h1>
+      <p>The frontend build was not found.</p>
+      <p>Run <code>npm --prefix frontend run build</code> to generate <code>static/index.html</code>.</p>
+    </main>
+  </body>
 </html>

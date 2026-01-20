@@ -1,13 +1,14 @@
 import logging
 from datetime import datetime
 
-from .paths import LOGS_DIR
+from .paths import get_logs_dir
 
 
-def init_logging(session_name):
-    LOGS_DIR.mkdir(exist_ok=True)
+def init_logging(session_name, config=None):
+    logs_dir = get_logs_dir(config)
+    logs_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_path = LOGS_DIR / f"{session_name}_{timestamp}.log"
+    log_path = logs_dir / f"{session_name}_{timestamp}.log"
 
     logger = logging.getLogger(f"mkdsc.{session_name}")
     logger.setLevel(logging.INFO)

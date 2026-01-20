@@ -1,5 +1,5 @@
 APP_NAME = "MK DroidScreenCast"
-VERSION = "0.1.0"
+VERSION = "1.0.0"
 
 REPO_OWNER = "MKultra6969"
 REPO_NAME = "MK_DroidScreenCast"

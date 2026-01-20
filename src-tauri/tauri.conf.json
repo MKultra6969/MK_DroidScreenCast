@@ -1,0 +1,40 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/schema.json",
+  "productName": "MK DroidScreenCast",
+  "version": "1.0.0",
+  "identifier": "com.mkdsc.app",
+  "build": {
+    "beforeDevCommand": "npm run tauri:dev",
+    "beforeBuildCommand": "npm run tauri:build",
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../frontend/dist-tauri"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "MK DroidScreenCast",
+        "width": 1280,
+        "height": 800,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
+    "resources": [
+      "../bin",
+      "../mkdsc",
+      "../templates",
+      "../static",
+      "../tauri_backend.py"
+    ]
+  }
+}

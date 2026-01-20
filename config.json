@@ -1,0 +1,46 @@
+{
+  "config_version": 1,
+  "language": "en",
+  "web": {
+    "host": "0.0.0.0",
+    "port": 6969,
+    "auto_open": true
+  },
+  "cli": {
+    "show_banner": true
+  },
+  "scrcpy": {
+    "bitrate": "8M",
+    "maxsize": "1080",
+    "keyboard": "uhid",
+    "presets": [
+      {
+        "name": "FullHD",
+        "bitrate": "8M",
+        "maxsize": "1080"
+      },
+      {
+        "name": "2K",
+        "bitrate": "16M",
+        "maxsize": "1440"
+      },
+      {
+        "name": "4K",
+        "bitrate": "32M",
+        "maxsize": "2160"
+      },
+      {
+        "name": "Main",
+        "bitrate": "100M",
+        "maxsize": "1080"
+      }
+    ],
+    "stay_awake": false,
+    "show_touches": false,
+    "fullscreen": false,
+    "no_audio": false,
+    "turn_screen_off": false
+  },
+  "devices": [],
+  "last_update_check": "2026-01-11T16:33:34.516489"
+}
