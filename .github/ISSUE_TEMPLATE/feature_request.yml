@@ -1,0 +1,45 @@
+name: Feature request
+description: Suggest a new feature or improvement
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Devices and connections
+        - Scrcpy and presets
+        - Recording HUD
+        - File manager / gallery
+        - Diagnostics / updates
+        - Settings / config
+        - UI / UX
+        - Automation (macros/scripts)
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the pain point or workflow.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How should it work?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches you have tried or considered.
+  - type: textarea
+    id: context
+    attributes:
+      label: Extra context
+      description: Screenshots, mockups, or examples.

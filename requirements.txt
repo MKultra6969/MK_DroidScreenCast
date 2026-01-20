@@ -3,3 +3,5 @@ rich
 fastapi
 uvicorn[standard]
 websockets
+python-multipart
+PyInstaller

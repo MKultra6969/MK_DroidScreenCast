@@ -6,7 +6,9 @@ from pathlib import Path
 
 import requests
 
-from .paths import DOWNLOADS_DIR
+from .paths import BASE_DIR, DOWNLOADS_DIR
+
+_TOOL_CACHE = {}
 
 PLATFORM_TOOLS_URLS = {
     "windows": "https://dl.google.com/android/repository/platform-tools-latest-windows.zip",
@@ -32,9 +34,17 @@ def run_cmd(cmd, cwd=None, show_output=False):
 
 
 def _find_exe(filename):
-    local_path = next(DOWNLOADS_DIR.glob(f"**/{filename}"), None)
-    if local_path:
-        return local_path
+    search_roots = [
+        DOWNLOADS_DIR,
+        BASE_DIR / "downloads",
+        BASE_DIR / "bin",
+        BASE_DIR,
+    ]
+    for root in search_roots:
+        if root.exists():
+            local_path = next(root.glob(f"**/{filename}"), None)
+            if local_path:
+                return local_path
     path = shutil.which(filename)
     if path:
         return Path(path)
@@ -160,15 +170,40 @@ def _verify_tool(path, args):
         return False
 
 
-def ensure_tools():
-    DOWNLOADS_DIR.mkdir(exist_ok=True)
+def _cache_tool(name, path):
+    if path:
+        _TOOL_CACHE[name] = Path(path)
+
+
+def _cached_tool(name):
+    path = _TOOL_CACHE.get(name)
+    if path and Path(path).exists():
+        return Path(path)
+    return None
+
+
+def _resolve_env_tool(env_key):
+    value = os.environ.get(env_key)
+    if not value:
+        return None
+    path = Path(value)
+    return path if path.exists() else None
+
+
+def _ensure_adb():
+    DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
+
+    override = _resolve_env_tool("MKDSC_ADB_PATH")
+    if override and _verify_tool(override, ["version"]):
+        _cache_tool("adb", override)
+        return override
+
+    cached = _cached_tool("adb")
+    if cached and _verify_tool(cached, ["version"]):
+        return cached
 
     adb_name = "adb.exe" if os.name == "nt" else "adb"
-    scrcpy_name = "scrcpy.exe" if os.name == "nt" else "scrcpy"
-
     adb_path = _find_exe(adb_name)
-    scrcpy_path = _find_exe(scrcpy_name)
-
     if not adb_path or not _verify_tool(adb_path, ["version"]):
         platform_key = _platform_key()
         platform_url = PLATFORM_TOOLS_URLS.get(platform_key)
@@ -179,6 +214,24 @@ def ensure_tools():
         if not adb_path:
             raise FileNotFoundError(f"{adb_name} not found after download")
 
+    _cache_tool("adb", adb_path)
+    return adb_path
+
+
+def _ensure_scrcpy():
+    DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
+
+    override = _resolve_env_tool("MKDSC_SCRCPY_PATH")
+    if override and _verify_tool(override, ["--version"]):
+        _cache_tool("scrcpy", override)
+        return override
+
+    cached = _cached_tool("scrcpy")
+    if cached and _verify_tool(cached, ["--version"]):
+        return cached
+
+    scrcpy_name = "scrcpy.exe" if os.name == "nt" else "scrcpy"
+    scrcpy_path = _find_exe(scrcpy_name)
     if not scrcpy_path or not _verify_tool(scrcpy_path, ["--version"]):
         assets = _fetch_scrcpy_release()
         asset = _select_scrcpy_asset(assets)
@@ -193,7 +246,23 @@ def ensure_tools():
         if not scrcpy_path:
             raise FileNotFoundError(f"{scrcpy_name} not found after download")
 
+    _cache_tool("scrcpy", scrcpy_path)
+    return scrcpy_path
+
+
+def ensure_tools():
+    adb_path = _ensure_adb()
+    scrcpy_path = _ensure_scrcpy()
     return adb_path, scrcpy_path
+
+
+def get_tool_path(name):
+    tool = (name or "").strip().lower()
+    if tool == "adb":
+        return _ensure_adb()
+    if tool == "scrcpy":
+        return _ensure_scrcpy()
+    raise ValueError(f"Unknown tool requested: {name}")
 
 
 def start_adb_server(adb_path):
@@ -233,8 +302,12 @@ def get_device_info(adb_path):
     }
 
 
-def get_device_wifi_ip(adb_path):
-    result = run_cmd([str(adb_path), "shell", "ip", "addr", "show", "wlan0"], show_output=False)
+def get_device_wifi_ip(adb_path, serial=None):
+    cmd = [str(adb_path)]
+    if serial:
+        cmd.extend(["-s", serial])
+    cmd.extend(["shell", "ip", "addr", "show", "wlan0"])
+    result = run_cmd(cmd, show_output=False)
     if result.returncode != 0:
         return None
 

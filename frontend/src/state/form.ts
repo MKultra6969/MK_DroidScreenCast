@@ -1,0 +1,33 @@
+import type { FormState } from '../types/app';
+
+export const initialFormState: FormState = {
+  saveDeviceName: '',
+  saveDeviceIp: '',
+  saveDevicePort: '5555',
+  quickConnectAddress: '',
+  pairAddress: '',
+  pairCode: '',
+  tcpipPort: '5555',
+  bitrateNum: '8',
+  maxsize: '1080',
+  keyboard: 'uhid',
+  connection: '',
+  scrcpyDevice: '',
+  scrcpyPreset: 'custom',
+  stayAwake: false,
+  showTouches: false,
+  turnScreenOff: false,
+  fullscreen: false,
+  noAudio: false,
+  presetName: '',
+  recordingFormat: 'mp4',
+  recordingAudioSource: 'output',
+  recordingOutputDir: '',
+  recordingFilePrefix: 'recording',
+  recordingShowPreview: true,
+  recordingStayAwake: false,
+  recordingShowTouches: false,
+  recordingTurnScreenOff: false,
+  recordingConnection: '',
+  recordingDevice: ''
+};

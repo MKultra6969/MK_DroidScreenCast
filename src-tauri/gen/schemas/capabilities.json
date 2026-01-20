@@ -1,0 +1,1 @@
+{"main-default":{"identifier":"main-default","description":"Default permissions for the main window.","local":true,"windows":["main"],"permissions":["core:default","dialog:allow-open"]}}

@@ -1,0 +1,15 @@
+{
+  "name": "mkdsc",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "tauri:dev": "npm --prefix frontend run dev -- --config vite.tauri.config.ts --mode tauri --port 5173",
+    "tauri:build": "npm --prefix frontend run build -- --config vite.tauri.config.ts --mode tauri",
+    "tauri:backend:build": "python scripts/build_tauri_backend.py",
+    "tauri:build:full": "npm run tauri:backend:build && npm run tauri build",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  }
+}

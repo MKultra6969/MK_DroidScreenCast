@@ -96,7 +96,7 @@ def apply_update(release=None, logger=None):
             "release_url": release.get("html_url") or RELEASES_URL,
         }
 
-    DOWNLOADS_DIR.mkdir(exist_ok=True)
+    DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
     updates_dir = DOWNLOADS_DIR / "updates"
     updates_dir.mkdir(exist_ok=True)
 
