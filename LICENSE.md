@@ -1,7 +1,7 @@
             DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
                     Version 2, January 2025
 
- Copyright (C) 2025 mkultra69 <mkultra69@otso.city>
+ Copyright (C) 2026 mkultra69 <mkultra69@otso.city>
 
  Everyone is permitted to copy and distribute verbatim or modified
  copies of this license document, and changing it is allowed as long
@@ -11,3 +11,4 @@
    TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
 
   0. You just DO WHAT THE FUCK YOU WANT TO.
+
