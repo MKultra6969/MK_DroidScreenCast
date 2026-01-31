@@ -1,7 +1,7 @@
 [🇺🇸English](https://github.com/MKultra6969/MK_DroidScreenCast/blob/main/README_ENG.md)
 <div align="center">
 
-# 📱 MK DroidScreenCast v1.0.0
+# 📱 MK DroidScreenCast v1.0.2
 
 **Полноценное настольное приложение для управления Android на базе ADB и Scrcpy**
 <br>
