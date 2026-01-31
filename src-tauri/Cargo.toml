@@ -1,6 +1,6 @@
 [package]
 name = "mkdsc-tauri"
-version = "1.0.0"
+version = "1.0.2"
 description = "MK DroidScreenCast"
 authors = ["MKultra69"]
 edition = "2024"

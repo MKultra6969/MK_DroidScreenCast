@@ -1,7 +1,7 @@
 {
   "name": "mkdsc",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.2",
   "scripts": {
     "tauri:dev": "npm --prefix frontend run dev -- --config vite.tauri.config.ts --mode tauri --port 5173",
     "tauri:build": "npm --prefix frontend run build -- --config vite.tauri.config.ts --mode tauri",

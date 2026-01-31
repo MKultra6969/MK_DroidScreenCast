@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/schema.json",
   "productName": "MK DroidScreenCast",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "identifier": "com.mkdsc.app",
   "build": {
     "beforeDevCommand": "npm run tauri:dev",

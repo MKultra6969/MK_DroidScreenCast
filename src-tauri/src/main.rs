@@ -1,7 +1,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::io::Write;
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use tauri::{Manager, RunEvent, WindowEvent};
 
@@ -24,7 +26,9 @@ fn resolve_base_dir(app: &tauri::AppHandle) -> std::path::PathBuf {
 
     let mut candidates: Vec<std::path::PathBuf> = Vec::new();
     if let Ok(dir) = app.path().resource_dir() {
-        candidates.push(dir);
+        candidates.push(dir.clone());
+        candidates.push(dir.join("app"));
+        candidates.push(dir.join("_up_"));
     }
     if let Ok(dir) = std::env::current_dir() {
         candidates.push(dir.clone());
@@ -38,8 +42,14 @@ fn resolve_base_dir(app: &tauri::AppHandle) -> std::path::PathBuf {
         candidates.push(parent.to_path_buf());
     }
 
+    let exe_suffix = if cfg!(windows) { ".exe" } else { "" };
+    let backend_name = format!("mkdsc-backend{exe_suffix}");
+
     for base in candidates {
-        if base.join("tauri_backend.py").exists() {
+        if base.join("tauri_backend.py").exists()
+            || base.join("bin").join(&backend_name).exists()
+            || base.join("mkdsc").exists()
+        {
             return base;
         }
     }
@@ -82,11 +92,38 @@ fn configure_backend_stdio(command: &mut Command, data_dir: &std::path::Path) {
     command.stdout(Stdio::null()).stderr(Stdio::null());
 }
 
+fn log_launcher_event(data_dir: &std::path::Path, message: &str) {
+    let log_dir = data_dir.join("logs");
+    if std::fs::create_dir_all(&log_dir).is_ok() {
+        let log_path = log_dir.join("backend.log");
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)
+        {
+            let ts = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            let _ = writeln!(file, "[launcher:{}] {}", ts, message);
+        }
+    }
+}
+
 fn spawn_backend(app: &tauri::AppHandle) -> Result<Child, Box<dyn std::error::Error>> {
     let base_dir = resolve_base_dir(app);
     let data_dir = resolve_data_dir(app, &base_dir);
 
     std::fs::create_dir_all(&data_dir)?;
+    log_launcher_event(
+        &data_dir,
+        &format!(
+            "base_dir={} data_dir={} prefer_python={}",
+            base_dir.display(),
+            data_dir.display(),
+            cfg!(debug_assertions) || std::env::var_os("MKDSC_FORCE_PYTHON").is_some()
+        ),
+    );
 
     let prefer_python =
         cfg!(debug_assertions) || std::env::var_os("MKDSC_FORCE_PYTHON").is_some();
@@ -104,6 +141,10 @@ fn spawn_backend(app: &tauri::AppHandle) -> Result<Child, Box<dyn std::error::Er
             .find(|path| path.exists());
 
         if let Some(path) = backend_path {
+            log_launcher_event(
+                &data_dir,
+                &format!("backend binary found at {}", path.display()),
+            );
             let mut command = Command::new(path);
             command
                 .current_dir(&base_dir)
@@ -118,6 +159,10 @@ fn spawn_backend(app: &tauri::AppHandle) -> Result<Child, Box<dyn std::error::Er
             return Ok(Some(command.spawn()?));
         }
 
+        log_launcher_event(
+            &data_dir,
+            "backend binary not found (bin/mkdsc-backend)",
+        );
         Ok(None)
     };
 
@@ -140,6 +185,11 @@ fn spawn_backend(app: &tauri::AppHandle) -> Result<Child, Box<dyn std::error::Er
         };
 
         let script_path = base_dir.join("tauri_backend.py");
+        if !script_path.exists() {
+            let message = format!("backend script not found: {}", script_path.display());
+            log_launcher_event(&data_dir, &message);
+            return Err(message.into());
+        }
 
         let mut command = Command::new(python);
         command
