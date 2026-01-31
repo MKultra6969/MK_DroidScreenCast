@@ -25,7 +25,7 @@ MK DroidScreenCast is a full desktop application that wraps `adb` and `scrcpy` w
 
 ## Interface
 
-> <img width="3840" height="2100" alt="showcase" src="https://github.com/user-attachments/assets/bf3c59fb-137c-48ce-8a27-f6a4b6339407" />
+> <img width="2490" height="1312" alt="showcase" src="https://github.com/user-attachments/assets/2d5e608a-a59e-494e-bb03-e8499dd1f990" />
 
 ---
 
