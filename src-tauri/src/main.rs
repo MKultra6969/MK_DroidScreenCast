@@ -231,7 +231,10 @@ fn main() {
         .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
             mkdsc_api_token,
-            api::api_devices
+            api::api_devices,
+            api::api_config,
+            api::api_config_full,
+            api::api_presets
         ])
         .manage(BackendState(Mutex::new(None)))
         .setup(|app| -> Result<(), Box<dyn std::error::Error>> {

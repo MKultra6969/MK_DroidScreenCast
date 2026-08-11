@@ -29,9 +29,19 @@ pub fn downloads_dir(app: &AppHandle) -> PathBuf {
     data_dir(app).join("downloads")
 }
 
-/// `DATA_DIR/config.json` — тот же файл, что читает и пишет Python.
+/// `DATA_DIR/config.json` — тот же файл, что читает Python.
 pub fn config_path(app: &AppHandle) -> PathBuf {
     data_dir(app).join("config.json")
+}
+
+/// `BASE_DIR/devices.json` — формат до появления `config.json`.
+///
+/// Читается только миграцией, и только пока список устройств пуст. Путь идёт
+/// от `BASE_DIR`, а не от `DATA_DIR`: так его считает `mkdsc/paths.py`, и
+/// разойтись здесь означало бы потерять устройства у тех, кто обновляется со
+/// старой версии.
+pub fn legacy_devices_path(app: &AppHandle) -> PathBuf {
+    base_dir(app).join("devices.json")
 }
 
 fn resolve_base_dir(app: &AppHandle) -> PathBuf {

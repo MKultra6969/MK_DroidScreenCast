@@ -14,7 +14,10 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+# `preserve_order` обязателен: конфигом владеет Rust, а `config.json` правится
+# руками и через редактор в UI. С дефолтным `BTreeMap` первая же запись
+# отсортировала бы ключи по алфавиту и перетасовала весь файл.
+serde_json = { version = "1", features = ["preserve_order"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-process = "2"
 uuid = { version = "1", features = ["v4"] }
