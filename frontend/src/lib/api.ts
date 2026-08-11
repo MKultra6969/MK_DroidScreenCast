@@ -75,7 +75,18 @@ type IpcRoute = {
  * таблице нет, роутер не трогает — такие пути молча уходят в `fetch`, и
  * непереехавшие эндпоинты продолжают работать.
  */
-const IPC_ROUTES: IpcRoute[] = [{ method: 'GET', pattern: '/api/devices', command: 'api_devices' }];
+const IPC_ROUTES: IpcRoute[] = [
+  { method: 'GET', pattern: '/api/devices', command: 'api_devices' },
+  { method: 'POST', pattern: '/api/devices/save', command: 'api_devices_save' },
+  { method: 'DELETE', pattern: '/api/devices/{ip}/{port}', command: 'api_devices_delete' },
+  { method: 'GET', pattern: '/api/config', command: 'api_config' },
+  { method: 'POST', pattern: '/api/config', command: 'api_config_update' },
+  { method: 'PUT', pattern: '/api/config', command: 'api_config_replace' },
+  { method: 'GET', pattern: '/api/config/full', command: 'api_config_full' },
+  { method: 'GET', pattern: '/api/presets', command: 'api_presets' },
+  { method: 'POST', pattern: '/api/presets', command: 'api_presets_save' },
+  { method: 'DELETE', pattern: '/api/presets/{name}', command: 'api_presets_delete' },
+];
 
 type IpcMatch = {
   command: string;

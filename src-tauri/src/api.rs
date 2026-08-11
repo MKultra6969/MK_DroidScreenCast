@@ -371,6 +371,55 @@ mod tests {
         assert_eq!(languages, LANGUAGES.to_vec());
     }
 
+    /// Таблица маршрутов фронтенда и список в `generate_handler!` обязаны
+    /// совпадать.
+    ///
+    /// Забытая в списке команда — не ошибка сборки: роутер отправит путь в
+    /// `invoke`, тот ответит «команды нет», и пользователь увидит 500 ровно на
+    /// том экране, который до переноса работал. Компилятор такое не ловит,
+    /// поэтому ловит тест.
+    #[test]
+    fn routed_commands_are_registered() {
+        let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let router = std::fs::read_to_string(
+            manifest
+                .parent()
+                .expect("src-tauri лежит в корне репозитория")
+                .join("frontend")
+                .join("src")
+                .join("lib")
+                .join("api.ts"),
+        )
+        .expect("роутер на месте");
+        let handlers =
+            std::fs::read_to_string(manifest.join("src").join("main.rs")).expect("main.rs на месте");
+
+        let routed: Vec<&str> = router
+            .split("command: '")
+            .skip(1)
+            .filter_map(|tail| tail.split_once('\'').map(|(command, _)| command))
+            .collect();
+
+        assert!(
+            routed.len() >= 10,
+            "разбор таблицы маршрутов дал слишком мало команд: {routed:?}"
+        );
+
+        for command in routed {
+            let needle = format!("api::{command}");
+            // Сравнение по границе имени: иначе `api_config` совпало бы с
+            // зарегистрированным `api_config_full`, и пропажа первой прошла бы
+            // незамеченной.
+            let registered = handlers.match_indices(&needle).any(|(index, _)| {
+                handlers[index + needle.len()..]
+                    .chars()
+                    .next()
+                    .is_none_or(|next| !next.is_alphanumeric() && next != '_')
+            });
+            assert!(registered, "команда {command} не зарегистрирована в main.rs");
+        }
+    }
+
     #[test]
     fn config_summary_mirrors_rest_shape() {
         let config = config::default_config();
