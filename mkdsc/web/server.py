@@ -282,6 +282,10 @@ async def bootstrap_status():
         "tool": progress.get("tool", ""),
         "downloaded_bytes": progress.get("downloaded_bytes", 0),
         "total_bytes": progress.get("total_bytes", 0),
+        # Версия scrcpy вне проверенного диапазона не блокирует запуск, но
+        # пользователь должен знать, почему часть опций может не работать.
+        "scrcpy_version": progress.get("scrcpy_version", ""),
+        "scrcpy_version_warning": progress.get("scrcpy_version_warning", ""),
     }
 
 

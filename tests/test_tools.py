@@ -4,7 +4,14 @@ import zipfile
 
 import pytest
 
-from mkdsc.tools import _ensure_executable, safe_extract_zip
+from mkdsc import tools
+from mkdsc.tools import (
+    _ensure_executable,
+    parse_scrcpy_version,
+    safe_extract_zip,
+    scrcpy_target_version,
+    scrcpy_version_warning,
+)
 
 posix_only = pytest.mark.skipif(
     os.name == "nt", reason="file modes have no meaning on Windows"
@@ -89,3 +96,55 @@ def test_ensure_executable_keeps_existing_mode(tmp_path):
 def test_ensure_executable_survives_missing_file(tmp_path):
     """Отсутствующий путь не должен ронять подготовку инструментов."""
     _ensure_executable(tmp_path / "nope")
+
+
+# --- scrcpy version ---------------------------------------------------------
+
+
+def test_parse_scrcpy_version_reads_real_output():
+    output = "scrcpy 4.1 <https://github.com/Genymobile/scrcpy>\n\nDependencies:\n - SDL: 3.4.12"
+    assert parse_scrcpy_version(output) == (4, 1, 0)
+
+
+def test_parse_scrcpy_version_reads_patch_release():
+    assert parse_scrcpy_version("scrcpy 3.3.4 <https://github.com/Genymobile/scrcpy>") == (3, 3, 4)
+
+
+def test_parse_scrcpy_version_returns_none_on_garbage():
+    assert parse_scrcpy_version("command not found") is None
+    assert parse_scrcpy_version("") is None
+
+
+@pytest.mark.parametrize("version", [(3, 3, 4), (4, 0, 0), (4, 1, 0), (4, 1, 2)])
+def test_no_warning_inside_tested_range(version):
+    assert scrcpy_version_warning(version) == ""
+
+
+@pytest.mark.parametrize("version", [(2, 7, 0), (3, 3, 3), (5, 0, 0)])
+def test_warns_outside_tested_range(version):
+    assert "outside the tested range" in scrcpy_version_warning(version)
+
+
+def test_no_warning_when_version_is_unknown():
+    """Не смогли разобрать версию — молчим, а не пугаем пользователя."""
+    assert scrcpy_version_warning(None) == ""
+
+
+def test_scrcpy_version_defaults_to_pinned(monkeypatch):
+    monkeypatch.delenv("MKDSC_SCRCPY_VERSION", raising=False)
+    assert scrcpy_target_version() == tools.SCRCPY_PINNED_VERSION
+
+
+def test_scrcpy_release_url_is_pinned_not_latest(monkeypatch):
+    """Регрессия: releases/latest отдавал непроверенную версию."""
+    monkeypatch.delenv("MKDSC_SCRCPY_VERSION", raising=False)
+    url = tools._scrcpy_release_url()
+    assert url.endswith(f"/tags/v{tools.SCRCPY_PINNED_VERSION}")
+    assert "latest" not in url
+
+
+def test_scrcpy_version_can_be_overridden(monkeypatch):
+    """Пользователь может поставить свою версию, не пересобирая приложение."""
+    monkeypatch.setenv("MKDSC_SCRCPY_VERSION", "v3.3.4")
+    assert scrcpy_target_version() == "3.3.4"
+    assert tools._scrcpy_release_url().endswith("/tags/v3.3.4")

@@ -1,5 +1,7 @@
+import logging
 import os
 import platform
+import re
 import shutil
 import subprocess
 import tarfile
@@ -9,6 +11,8 @@ from pathlib import Path
 import requests
 
 from .paths import BASE_DIR, DOWNLOADS_DIR
+
+logger = logging.getLogger("mkdsc.tools")
 
 _TOOL_CACHE = {}
 
@@ -36,7 +40,25 @@ PLATFORM_TOOLS_URLS = {
     "linux": "https://dl.google.com/android/repository/platform-tools-latest-linux.zip",
     "darwin": "https://dl.google.com/android/repository/platform-tools-latest-darwin.zip",
 }
-SCRCPY_API_URL = "https://api.github.com/repos/Genymobile/scrcpy/releases/latest"
+# Раньше здесь был releases/latest, и каждая новая установка получала версию,
+# на которой приложение никто не проверял: у разработчика лежал 3.3.4, а
+# пользователь получал 4.x. Приложение управляет scrcpy строкой аргументов,
+# поэтому переименованный флаг в мажорном релизе ломает продукт у всех новых
+# пользователей сразу.
+SCRCPY_PINNED_VERSION = "4.1"
+SCRCPY_RELEASES_API = "https://api.github.com/repos/Genymobile/scrcpy/releases"
+
+# Диапазон, на котором проверен набор флагов из mkdsc/web/server.py
+# (launch_scrcpy_api и start_recording) и mkdsc/cli/app.py. Сверено по
+# app/src/cli.c тегов v3.3.4 и v4.1: ни один используемый флаг не удалён и не
+# переименован, значения --keyboard (uhid/sdk/aoa) и --audio-source
+# (output/mic) на месте. В 4.x выпали только давно устаревшие псевдонимы
+# (--bit-rate, --display, --no-display, --hid-keyboard), которых здесь нет.
+#
+# Верхняя граница сравнивается по major.minor: патч-релизы внутри 4.1 набор
+# флагов не меняют.
+SCRCPY_VERIFIED_MIN = (3, 3, 4)
+SCRCPY_VERIFIED_MAX = (4, 1)
 
 
 def run_cmd(cmd, cwd=None, show_output=False, timeout=DEFAULT_CMD_TIMEOUT):
@@ -122,7 +144,15 @@ _BOOTSTRAP_STATUS = {
     "tool": "",
     "downloaded_bytes": 0,
     "total_bytes": 0,
+    # Версия найденного scrcpy и предупреждение, если она вне проверенного
+    # диапазона. Пустая строка — предупреждать не о чем.
+    "scrcpy_version": "",
+    "scrcpy_version_warning": "",
 }
+
+# Запуск `scrcpy --version` на каждое разрешение пути обходится в лишний
+# процесс, а ответ не меняется — держим результат по пути к бинарю.
+_SCRCPY_VERSION_CACHE = {}
 
 
 def get_bootstrap_status():
@@ -301,8 +331,24 @@ def _select_scrcpy_asset(assets):
     return candidates[0]
 
 
+def scrcpy_target_version():
+    """Версия scrcpy, которую надо поставить.
+
+    ``MKDSC_SCRCPY_VERSION`` позволяет взять свою версию, не пересобирая
+    приложение (например, откатиться, если в закреплённой нашёлся баг).
+    Ведущая ``v`` необязательна.
+    """
+    value = (os.environ.get("MKDSC_SCRCPY_VERSION") or "").strip().lstrip("vV")
+    return value or SCRCPY_PINNED_VERSION
+
+
+def _scrcpy_release_url():
+    return f"{SCRCPY_RELEASES_API}/tags/v{scrcpy_target_version()}"
+
+
 def _fetch_scrcpy_release():
-    response = requests.get(SCRCPY_API_URL, timeout=10)
+    """Ассеты закреплённого релиза scrcpy."""
+    response = requests.get(_scrcpy_release_url(), timeout=10)
     response.raise_for_status()
     payload = response.json()
     assets = []
@@ -312,6 +358,69 @@ def _fetch_scrcpy_release():
             "url": asset.get("browser_download_url"),
         })
     return assets
+
+
+_VERSION_RE = re.compile(r"(\d+)\.(\d+)(?:\.(\d+))?")
+
+
+def parse_scrcpy_version(output):
+    """Версия из вывода ``scrcpy --version`` как кортеж ``(major, minor, micro)``.
+
+    Первая строка вывода выглядит так::
+
+        scrcpy 4.1 <https://github.com/Genymobile/scrcpy>
+
+    :returns: кортеж или ``None``, если версию разобрать не удалось.
+    """
+    for line in (output or "").splitlines():
+        line = line.strip()
+        if not line.lower().startswith("scrcpy"):
+            continue
+        match = _VERSION_RE.search(line)
+        if match:
+            major, minor, micro = match.groups()
+            return (int(major), int(minor), int(micro or 0))
+    return None
+
+
+def scrcpy_version_warning(version):
+    """Текст предупреждения, если версия вне проверенного диапазона.
+
+    Пустая строка означает «всё в порядке». Предупреждение намеренно не
+    блокирует запуск: пользователь мог поставить свою версию сознательно.
+    """
+    if version is None:
+        return ""
+    if version >= SCRCPY_VERIFIED_MIN and version[:2] <= SCRCPY_VERIFIED_MAX:
+        return ""
+    found = ".".join(str(part) for part in version)
+    tested_min = ".".join(str(part) for part in SCRCPY_VERIFIED_MIN)
+    return (
+        f"scrcpy {found} is outside the tested range "
+        f"{tested_min}-{SCRCPY_PINNED_VERSION}; some options may not work"
+    )
+
+
+def _record_scrcpy_version(path):
+    """Разбирает ``scrcpy --version`` и кладёт результат в статус загрузки.
+
+    Вызывается на каждом разрешении пути к scrcpy, поэтому результат
+    запоминается: лишний запуск процесса на каждый запрос ни к чему.
+    """
+    key = str(path)
+    if key in _SCRCPY_VERSION_CACHE:
+        return _SCRCPY_VERSION_CACHE[key]
+
+    result = run_cmd([str(path), "--version"], show_output=False)
+    version = parse_scrcpy_version(f"{result.stdout}\n{result.stderr}")
+    text = ".".join(str(part) for part in version) if version else ""
+    warning = scrcpy_version_warning(version)
+    if warning:
+        logger.warning(warning)
+
+    _SCRCPY_VERSION_CACHE[key] = (text, warning)
+    _set_bootstrap_status(scrcpy_version=text, scrcpy_version_warning=warning)
+    return text, warning
 
 
 def _ensure_executable(path):
@@ -405,10 +514,13 @@ def _ensure_scrcpy():
     override = _resolve_env_tool("MKDSC_SCRCPY_PATH")
     if override and _verify_tool(override, ["--version"]):
         _cache_tool("scrcpy", override)
+        # Свой scrcpy — как раз тот случай, ради которого версия и проверяется.
+        _record_scrcpy_version(override)
         return override
 
     cached = _cached_tool("scrcpy")
     if cached and _verify_tool(cached, ["--version"]):
+        _record_scrcpy_version(cached)
         return cached
 
     scrcpy_name = "scrcpy.exe" if os.name == "nt" else "scrcpy"
@@ -432,6 +544,7 @@ def _ensure_scrcpy():
         _ensure_executable(scrcpy_path)
 
     _cache_tool("scrcpy", scrcpy_path)
+    _record_scrcpy_version(scrcpy_path)
     return scrcpy_path
 
 

@@ -145,6 +145,9 @@ function App() {
   const wsRetryRef = useRef(0);
   const notificationIdRef = useRef(0);
   const lastRecordingErrorRef = useRef<string | null>(null);
+  // Опрос бутстрапа переживает перезапуск эффекта; предупреждение о версии
+  // scrcpy показываем один раз, а не на каждом тике.
+  const scrcpyVersionWarnedRef = useRef(false);
 
   const t = useCallback((key: string) => i18n[key] || key, [i18n]);
 
@@ -301,6 +304,12 @@ function App() {
       const response = await apiFetch('/api/bootstrap/status', { timeoutMs: 4000 });
       if (!response.ok) return true;
       const data = await response.json();
+      // Версия scrcpy вне проверенного диапазона не мешает запуску, но часть
+      // опций может молча не сработать — предупреждаем.
+      if (data.scrcpy_version_warning && !scrcpyVersionWarnedRef.current) {
+        scrcpyVersionWarnedRef.current = true;
+        notifyMessage('error', String(data.scrcpy_version_warning));
+      }
       if (data.ready) {
         setBootProgress('');
         return true;
@@ -322,7 +331,7 @@ function App() {
     } catch {
       return true;
     }
-  }, [formatMessage, t]);
+  }, [formatMessage, notifyMessage, t]);
 
   const loadDevices = useCallback(async () => {
     try {
