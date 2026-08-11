@@ -46,3 +46,37 @@ jobs:
             git status --porcelain static/
             exit 1
           fi
+
+  rust:
+    name: Rust tests and lint
+    # Same runner and toolchain as release.yml on purpose: this job exists to
+    # fail here rather than halfway through a tagged release build.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      # The crate links the real Tauri, so even `cargo test` needs WebKitGTK.
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.85'
+          components: clippy
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      # tauri.conf.json lists both as bundle resources, and the build script
+      # refuses to run while they are missing. Everything else it lists is
+      # committed; these two are build outputs and gitignored. Empty
+      # directories are enough here — no step reads their contents.
+      - name: Create the gitignored paths the Tauri build script requires
+        run: mkdir -p bin frontend/dist-tauri
+
+      - run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
