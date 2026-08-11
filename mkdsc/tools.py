@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import os
 import platform
@@ -35,11 +36,28 @@ _IGNORED_SEARCH_DIRS = frozenset({
 })
 _MAX_SEARCH_DEPTH = 5
 
+_ANDROID_REPO = "https://dl.google.com/android/repository"
+
+# Качаем конкретную ревизию platform-tools, а не 'platform-tools-latest-*.zip':
+# у 'latest' нет опубликованной контрольной суммы и содержимое меняется под
+# нами, так что проверить нечего и версия у каждого своя. Версионные архивы на
+# dl.google.com лежат бессрочно (r33 доступен до сих пор), поэтому пин безопасен.
+#
+# Google публикует суммы только в repository2-3.xml и только SHA-1, поэтому
+# SHA-256 зафиксированы здесь. Посчитаны с этих самых файлов; их SHA-1 сверены
+# с манифестом. Порядок обновления ревизии описан в docs/build.md.
+PLATFORM_TOOLS_REVISION = "37.0.1"
 PLATFORM_TOOLS_URLS = {
-    "windows": "https://dl.google.com/android/repository/platform-tools-latest-windows.zip",
-    "linux": "https://dl.google.com/android/repository/platform-tools-latest-linux.zip",
-    "darwin": "https://dl.google.com/android/repository/platform-tools-latest-darwin.zip",
+    "windows": f"{_ANDROID_REPO}/platform-tools_r{PLATFORM_TOOLS_REVISION}-win.zip",
+    "linux": f"{_ANDROID_REPO}/platform-tools_r{PLATFORM_TOOLS_REVISION}-linux.zip",
+    "darwin": f"{_ANDROID_REPO}/platform-tools_r{PLATFORM_TOOLS_REVISION}-darwin.zip",
 }
+PLATFORM_TOOLS_SHA256 = {
+    "windows": "45f4d63113e895ebde0c90f194099a4676b6ac653bd28d54314a9e022bbc1a99",
+    "linux": "d230f13842f60f782a8645f9c813f8f845bf36089ea7289f28c48f17979313f1",
+    "darwin": "ee39ad5967e95c2a07f04dbcbde96b1a0c916ba376096db5d2f498b7727a5d1d",
+}
+
 # Раньше здесь был releases/latest, и каждая новая установка получала версию,
 # на которой приложение никто не проверял: у разработчика лежал 3.3.4, а
 # пользователь получал 4.x. Приложение управляет scrcpy строкой аргументов,
@@ -47,6 +65,7 @@ PLATFORM_TOOLS_URLS = {
 # пользователей сразу.
 SCRCPY_PINNED_VERSION = "4.1"
 SCRCPY_RELEASES_API = "https://api.github.com/repos/Genymobile/scrcpy/releases"
+SCRCPY_CHECKSUMS_ASSET = "SHA256SUMS.txt"
 
 # Диапазон, на котором проверен набор флагов из mkdsc/web/server.py
 # (launch_scrcpy_api и start_recording) и mkdsc/cli/app.py. Сверено по
@@ -182,6 +201,51 @@ def _download_file(url, dest, tool_name=""):
                     _set_bootstrap_status(downloaded_bytes=received)
 
 
+def _sha256_file(path) -> str:
+    """SHA-256 файла, читая его кусками: архивы весят десятки мегабайт."""
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _verify_sha256(path: Path, expected: str) -> None:
+    """Сверяет контрольную сумму архива ДО распаковки.
+
+    Раньше скачанное сразу уходило в распаковщик: подмену архива (MITM,
+    компрометация зеркала, кривой редирект) заметить было нечем. Битый файл
+    удаляем, чтобы следующий запуск не пытался распаковать его повторно.
+
+    :raises RuntimeError: сумма не совпала.
+    """
+    actual = _sha256_file(path)
+    if actual.lower() != (expected or "").strip().lower():
+        path.unlink(missing_ok=True)
+        raise RuntimeError(
+            f"Checksum mismatch for {path.name}: "
+            f"expected {expected}, got {actual}. Download was discarded."
+        )
+
+
+def _parse_sha256sums(text, wanted_name):
+    """Достаёт сумму нужного файла из ``SHA256SUMS.txt``.
+
+    Формат sha256sum: ``<hex>  <имя>``; в бинарном режиме имя идёт с ``*``.
+    """
+    for line in (text or "").splitlines():
+        parts = line.split()
+        if len(parts) != 2:
+            continue
+        digest, name = parts
+        if name.lstrip("*") != wanted_name:
+            continue
+        digest = digest.strip().lower()
+        if len(digest) == 64 and all(char in "0123456789abcdef" for char in digest):
+            return digest
+    return None
+
+
 def _assert_within(dest_dir: Path, member_name: str) -> None:
     """Не даём записи вида '../../Startup/evil.bat' уйти из целевой папки."""
     name = (member_name or "").replace("\\", "/")
@@ -258,10 +322,13 @@ def _extract_archive(archive_path):
     raise ValueError(f"Unsupported archive format: {archive_path.name}")
 
 
-def _download_and_extract(name, url, archive_name=None):
+def _download_and_extract(name, url, archive_name=None, expected_sha256=None):
     archive_name = archive_name or f"{name}.zip"
     archive_path = DOWNLOADS_DIR / archive_name
     _download_file(url, archive_path, tool_name=name)
+    if expected_sha256:
+        _set_bootstrap_status(stage="verifying", tool=name)
+        _verify_sha256(archive_path, expected_sha256)
     _set_bootstrap_status(stage="extracting", tool=name)
     _extract_archive(archive_path)
     archive_path.unlink(missing_ok=True)
@@ -347,17 +414,38 @@ def _scrcpy_release_url():
 
 
 def _fetch_scrcpy_release():
-    """Ассеты закреплённого релиза scrcpy."""
+    """Ассеты закреплённого релиза scrcpy.
+
+    :returns: ``(assets, checksums_url)``, где ``assets`` — список
+        ``{"name", "url"}`` без файла сумм, а ``checksums_url`` — ссылка на
+        ``SHA256SUMS.txt`` или ``None``, если релиз его не публикует.
+    """
     response = requests.get(_scrcpy_release_url(), timeout=10)
     response.raise_for_status()
     payload = response.json()
     assets = []
+    checksums_url = None
     for asset in payload.get("assets", []) or []:
-        assets.append({
-            "name": asset.get("name"),
-            "url": asset.get("browser_download_url"),
-        })
-    return assets
+        name = asset.get("name")
+        url = asset.get("browser_download_url")
+        if name == SCRCPY_CHECKSUMS_ASSET:
+            checksums_url = url
+            continue
+        assets.append({"name": name, "url": url})
+    return assets, checksums_url
+
+
+def _fetch_scrcpy_checksum(checksums_url, archive_name):
+    """SHA-256 конкретного ассета из ``SHA256SUMS.txt`` релиза.
+
+    Подпись ``SHA256SUMS.txt.asc`` намеренно не проверяется: для этого нужен
+    вшитый публичный ключ и работа с ключевым хранилищем — отдельная задача.
+    """
+    if not checksums_url:
+        return None
+    response = requests.get(checksums_url, timeout=10)
+    response.raise_for_status()
+    return _parse_sha256sums(response.text, archive_name)
 
 
 _VERSION_RE = re.compile(r"(\d+)\.(\d+)(?:\.(\d+))?")
@@ -498,7 +586,12 @@ def _ensure_adb():
         platform_url = PLATFORM_TOOLS_URLS.get(platform_key)
         if not platform_url:
             raise RuntimeError(f"Unsupported platform for adb: {platform_key}")
-        _download_and_extract("platform-tools", platform_url)
+        _download_and_extract(
+            "platform-tools",
+            platform_url,
+            archive_name=f"platform-tools-{PLATFORM_TOOLS_REVISION}-{platform_key}.zip",
+            expected_sha256=PLATFORM_TOOLS_SHA256.get(platform_key),
+        )
         adb_path = _find_exe(adb_name)
         if not adb_path:
             raise FileNotFoundError(f"{adb_name} not found after download")
@@ -529,7 +622,7 @@ def _ensure_scrcpy():
         # См. комментарий в _ensure_adb: режим чиним до проверки запуска.
         _ensure_executable(scrcpy_path)
     if not scrcpy_path or not _verify_tool(scrcpy_path, ["--version"]):
-        assets = _fetch_scrcpy_release()
+        assets, checksums_url = _fetch_scrcpy_release()
         asset = _select_scrcpy_asset(assets)
         if not asset or not asset.get("url"):
             raise FileNotFoundError("scrcpy archive not found for this platform")
@@ -537,7 +630,22 @@ def _ensure_scrcpy():
         lowered = archive_name.lower()
         if not (lowered.endswith(".zip") or lowered.endswith(".tar.gz") or lowered.endswith(".tgz")):
             raise RuntimeError(f"Unsupported scrcpy archive format: {archive_name}")
-        _download_and_extract("scrcpy", asset["url"], archive_name=archive_name)
+        expected_sha256 = _fetch_scrcpy_checksum(checksums_url, archive_name)
+        if not expected_sha256:
+            # Падаем закрыто: без опубликованной суммы проверить нечего, а
+            # молча ставить непроверенный бинарь — ровно то, что чинится.
+            raise RuntimeError(
+                f"No SHA-256 checksum published for {archive_name}. "
+                f"Set MKDSC_SCRCPY_VERSION to a release that ships "
+                f"{SCRCPY_CHECKSUMS_ASSET}, or point MKDSC_SCRCPY_PATH at your "
+                f"own scrcpy."
+            )
+        _download_and_extract(
+            "scrcpy",
+            asset["url"],
+            archive_name=archive_name,
+            expected_sha256=expected_sha256,
+        )
         scrcpy_path = _find_exe(scrcpy_name)
         if not scrcpy_path:
             raise FileNotFoundError(f"{scrcpy_name} not found after download")

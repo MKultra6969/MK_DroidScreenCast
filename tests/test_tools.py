@@ -7,6 +7,9 @@ import pytest
 from mkdsc import tools
 from mkdsc.tools import (
     _ensure_executable,
+    _parse_sha256sums,
+    _sha256_file,
+    _verify_sha256,
     parse_scrcpy_version,
     safe_extract_zip,
     scrcpy_target_version,
@@ -96,6 +99,63 @@ def test_ensure_executable_keeps_existing_mode(tmp_path):
 def test_ensure_executable_survives_missing_file(tmp_path):
     """Отсутствующий путь не должен ронять подготовку инструментов."""
     _ensure_executable(tmp_path / "nope")
+
+
+# --- checksums --------------------------------------------------------------
+
+
+def test_verify_sha256_accepts_matching_digest(tmp_path):
+    archive = tmp_path / "tool.zip"
+    archive.write_bytes(b"payload")
+
+    _verify_sha256(archive, _sha256_file(archive))
+
+    assert archive.exists()
+
+
+def test_verify_sha256_rejects_and_removes_tampered_archive(tmp_path):
+    """Подменённый архив не должен дойти до распаковщика."""
+    archive = tmp_path / "tool.zip"
+    archive.write_bytes(b"tampered")
+
+    with pytest.raises(RuntimeError):
+        _verify_sha256(archive, "0" * 64)
+
+    assert not archive.exists()
+
+
+def test_parse_sha256sums_finds_requested_asset():
+    text = (
+        "deacb991ed2509715160ffdc7907e47b4160eb30d1566217e9047fd5b8850cae  "
+        "scrcpy-server-v4.1\n"
+        "5b12172b3264b2889f4583ee64752ce832e29bc8b1089dca81093459697165db  "
+        "scrcpy-win64-v4.1.zip\n"
+    )
+
+    assert _parse_sha256sums(text, "scrcpy-win64-v4.1.zip") == (
+        "5b12172b3264b2889f4583ee64752ce832e29bc8b1089dca81093459697165db"
+    )
+    assert _parse_sha256sums(text, "scrcpy-linux-x86_64-v4.1.tar.gz") is None
+
+
+def test_parse_sha256sums_accepts_binary_mode_marker():
+    """sha256sum в бинарном режиме печатает имя с префиксом '*'."""
+    digest = "a" * 64
+    assert _parse_sha256sums(f"{digest} *scrcpy-win64-v4.1.zip", "scrcpy-win64-v4.1.zip") == digest
+
+
+def test_parse_sha256sums_ignores_malformed_lines():
+    assert _parse_sha256sums("not-a-hash  tool.zip", "tool.zip") is None
+    assert _parse_sha256sums("", "tool.zip") is None
+
+
+def test_platform_tools_are_pinned_with_checksums():
+    """Регрессия: URL 'latest' проверить нечем и версия у каждого своя."""
+    for key, url in tools.PLATFORM_TOOLS_URLS.items():
+        assert "latest" not in url, f"{key} is not pinned to a revision"
+        assert tools.PLATFORM_TOOLS_REVISION in url
+        digest = tools.PLATFORM_TOOLS_SHA256.get(key)
+        assert digest and len(digest) == 64, f"no SHA-256 pinned for {key}"
 
 
 # --- scrcpy version ---------------------------------------------------------

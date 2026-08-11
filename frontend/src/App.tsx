@@ -322,6 +322,8 @@ function App() {
       if (data.stage === 'downloading' && data.total_bytes > 0) {
         const percent = Math.round((data.downloaded_bytes / data.total_bytes) * 100);
         setBootProgress(formatMessage('boot_downloading', { tool, percent: String(percent) }));
+      } else if (data.stage === 'verifying') {
+        setBootProgress(formatMessage('boot_verifying', { tool }));
       } else if (data.stage === 'extracting') {
         setBootProgress(formatMessage('boot_extracting', { tool }));
       } else {
