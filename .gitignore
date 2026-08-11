@@ -60,6 +60,15 @@ src-tauri/target/
 # Config is mutated at runtime; ship config.example.json instead.
 config.json
 
+# Signing keys — NEVER commit these.
+# `~/` is a real directory created by running a command with an unexpanded
+# tilde (e.g. `tauri signer generate -w ~/.tauri/mkdsc.key` in a shell that
+# does not expand it). The Tauri updater private key must live in the user's
+# home directory, not in the repository.
+~/
+*.key
+!*.key.pub
+
 # OS / IDE
 .DS_Store
 Thumbs.db
