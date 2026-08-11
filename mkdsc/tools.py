@@ -162,6 +162,34 @@ def _assert_within(dest_dir: Path, member_name: str) -> None:
         raise ValueError(f"Unsafe archive entry: {member_name!r}")
 
 
+def _restore_zip_modes(zf: zipfile.ZipFile, dest_dir: Path) -> None:
+    """Возвращает файлам права Unix, которые теряет ``extractall``.
+
+    ``zipfile`` не применяет режим из архива — всё извлекается по umask
+    (обычно 0644). adb приезжает именно zip-архивом, поэтому на Linux
+    ``downloads/platform-tools/adb`` оставался без бита исполнения:
+    ``_verify_tool`` падал с PermissionError, приложение решало, что adb
+    сломан, качало архив заново — и так каждый запуск. На чистой машине без
+    системного adb продукт не работал вообще.
+
+    Режим лежит в старших 16 битах ``external_attr`` (то же значение, что
+    ``st_mode``).
+    """
+    for member in zf.infolist():
+        if member.is_dir():
+            continue
+        mode = (member.external_attr >> 16) & 0o777
+        if not mode:
+            # Архив собран не на Unix — поля с правами нет, оставляем umask.
+            continue
+        target = dest_dir / member.filename
+        try:
+            target.chmod(mode)
+        except OSError:
+            # Не повод валить установку: ниже есть страховка _ensure_executable.
+            continue
+
+
 def safe_extract_zip(archive_path: Path, dest_dir: Path) -> None:
     dest_dir = Path(dest_dir).resolve()
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -169,6 +197,9 @@ def safe_extract_zip(archive_path: Path, dest_dir: Path) -> None:
         for member in zf.infolist():
             _assert_within(dest_dir, member.filename)
         zf.extractall(dest_dir)
+        if os.name != "nt":
+            # На Windows режимы файлов семантики не имеют.
+            _restore_zip_modes(zf, dest_dir)
 
 
 def safe_extract_tar(archive_path: Path, dest_dir: Path, mode: str = "r:gz") -> None:
@@ -283,6 +314,30 @@ def _fetch_scrcpy_release():
     return assets
 
 
+def _ensure_executable(path):
+    """Доставляет бит исполнения на POSIX, если его нет.
+
+    Страховка к :func:`_restore_zip_modes`: тот полагается на ``external_attr``,
+    а его в архиве может не оказаться (архив собран на Windows, пересобран
+    зеркалом и т.п.). Тогда бинарь окажется 0644 и просто не запустится.
+    Дешевле поправить режим здесь, чем ловить PermissionError из subprocess.
+
+    На Windows режимы файлов семантики не имеют — выходим сразу.
+    """
+    if os.name == "nt":
+        return
+    try:
+        mode = Path(path).stat().st_mode
+    except OSError:
+        return
+    if mode & 0o111:
+        return
+    try:
+        Path(path).chmod(mode | 0o111)
+    except OSError:
+        pass
+
+
 def _verify_tool(path, args):
     try:
         result = run_cmd([str(path)] + args, show_output=False)
@@ -325,6 +380,10 @@ def _ensure_adb():
 
     adb_name = "adb.exe" if os.name == "nt" else "adb"
     adb_path = _find_exe(adb_name)
+    if adb_path:
+        # Права чиним ДО проверки: иначе распакованный ранее 0644-adb не
+        # запустится, и мы уйдём качать архив по кругу.
+        _ensure_executable(adb_path)
     if not adb_path or not _verify_tool(adb_path, ["version"]):
         platform_key = _platform_key()
         platform_url = PLATFORM_TOOLS_URLS.get(platform_key)
@@ -334,6 +393,7 @@ def _ensure_adb():
         adb_path = _find_exe(adb_name)
         if not adb_path:
             raise FileNotFoundError(f"{adb_name} not found after download")
+        _ensure_executable(adb_path)
 
     _cache_tool("adb", adb_path)
     return adb_path
@@ -353,6 +413,9 @@ def _ensure_scrcpy():
 
     scrcpy_name = "scrcpy.exe" if os.name == "nt" else "scrcpy"
     scrcpy_path = _find_exe(scrcpy_name)
+    if scrcpy_path:
+        # См. комментарий в _ensure_adb: режим чиним до проверки запуска.
+        _ensure_executable(scrcpy_path)
     if not scrcpy_path or not _verify_tool(scrcpy_path, ["--version"]):
         assets = _fetch_scrcpy_release()
         asset = _select_scrcpy_asset(assets)
@@ -366,6 +429,7 @@ def _ensure_scrcpy():
         scrcpy_path = _find_exe(scrcpy_name)
         if not scrcpy_path:
             raise FileNotFoundError(f"{scrcpy_name} not found after download")
+        _ensure_executable(scrcpy_path)
 
     _cache_tool("scrcpy", scrcpy_path)
     return scrcpy_path

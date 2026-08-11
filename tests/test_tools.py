@@ -1,0 +1,91 @@
+import os
+import stat
+import zipfile
+
+import pytest
+
+from mkdsc.tools import _ensure_executable, safe_extract_zip
+
+posix_only = pytest.mark.skipif(
+    os.name == "nt", reason="file modes have no meaning on Windows"
+)
+
+
+def _write_zip(path, name, payload, external_attr=None):
+    with zipfile.ZipFile(path, "w") as zf:
+        info = zipfile.ZipInfo(name)
+        if external_attr is not None:
+            info.external_attr = external_attr
+        zf.writestr(info, payload)
+
+
+# --- exec bit after unzip ---------------------------------------------------
+
+
+@posix_only
+def test_zip_extract_restores_exec_bit(tmp_path):
+    """adb приезжает zip-архивом, а zipfile теряет права Unix.
+
+    Без восстановления режима downloads/platform-tools/adb оказывался 0644,
+    и на Linux приложение не могло его запустить вообще.
+    """
+    archive = tmp_path / "platform-tools.zip"
+    _write_zip(archive, "platform-tools/adb", "binary", external_attr=0o755 << 16)
+
+    dest = tmp_path / "out"
+    safe_extract_zip(archive, dest)
+
+    extracted = dest / "platform-tools" / "adb"
+    assert extracted.read_text() == "binary"
+    assert extracted.stat().st_mode & stat.S_IXUSR
+
+
+@posix_only
+def test_zip_extract_keeps_non_executable_entries_non_executable(tmp_path):
+    """Восстанавливаем именно записанный режим, а не «всем +x»."""
+    archive = tmp_path / "platform-tools.zip"
+    _write_zip(archive, "platform-tools/NOTICE.txt", "text", external_attr=0o644 << 16)
+
+    dest = tmp_path / "out"
+    safe_extract_zip(archive, dest)
+
+    extracted = dest / "platform-tools" / "NOTICE.txt"
+    assert not extracted.stat().st_mode & stat.S_IXUSR
+
+
+def test_zip_without_unix_attrs_still_extracts(tmp_path):
+    """Архив, собранный не на Unix: поле прав пустое — это не ошибка."""
+    archive = tmp_path / "windows-made.zip"
+    _write_zip(archive, "platform-tools/adb.exe", "binary", external_attr=0)
+
+    dest = tmp_path / "out"
+    safe_extract_zip(archive, dest)
+
+    assert (dest / "platform-tools" / "adb.exe").read_text() == "binary"
+
+
+@posix_only
+def test_ensure_executable_adds_exec_bit(tmp_path):
+    binary = tmp_path / "adb"
+    binary.write_text("binary", encoding="utf-8")
+    binary.chmod(0o644)
+
+    _ensure_executable(binary)
+
+    assert binary.stat().st_mode & stat.S_IXUSR
+
+
+@posix_only
+def test_ensure_executable_keeps_existing_mode(tmp_path):
+    binary = tmp_path / "adb"
+    binary.write_text("binary", encoding="utf-8")
+    binary.chmod(0o755)
+
+    _ensure_executable(binary)
+
+    assert stat.S_IMODE(binary.stat().st_mode) == 0o755
+
+
+def test_ensure_executable_survives_missing_file(tmp_path):
+    """Отсутствующий путь не должен ронять подготовку инструментов."""
+    _ensure_executable(tmp_path / "nope")
