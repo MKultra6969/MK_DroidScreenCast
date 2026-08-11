@@ -60,6 +60,14 @@ src-tauri/target/
 # Config is mutated at runtime; ship config.example.json instead.
 config.json
 
+# Internal working notes — deliberately NOT part of the repository.
+# Agent rules, the audit report and the Rust-port milestone plans are personal
+# development scaffolding, not project documentation. Real docs live in docs/
+# (build.md and friends). Keep these out of the tree that ships.
+/AGENTS.md
+/BUGHUNT_REPORT.md
+/docs/plan-*.md
+
 # Signing keys — NEVER commit these.
 # `~/` is a real directory created by running a command with an unexpanded
 # tilde (e.g. `tauri signer generate -w ~/.tauri/mkdsc.key` in a shell that
