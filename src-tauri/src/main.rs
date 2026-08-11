@@ -99,6 +99,14 @@ fn log_launcher_event(data_dir: &std::path::Path, message: &str) {
     }
 }
 
+/// Запускает Python-бэкенд: сначала собранный бинарь, иначе `tauri_backend.py`.
+///
+/// `MKDSC_CONFIG_READONLY=1` переводит бэкенд в режим «только чтение конфига».
+/// `config.json` принадлежит лаунчеру (см. `config.rs`), и второй писатель не
+/// повредил бы файл, а просто затирал бы чужие правки целиком: каждый пишет
+/// свою версию, прочитанную до правки соседа. Читать конфиг Python
+/// продолжает — оттуда берутся настройки scrcpy, записи и путей. Standalone
+/// (`python web_panel.py`) переменной не видит и работает как раньше.
 fn spawn_backend(app: &tauri::AppHandle) -> Result<Child, Box<dyn std::error::Error>> {
     let base_dir = paths::base_dir(app);
     let data_dir = paths::data_dir(app);
@@ -142,6 +150,7 @@ fn spawn_backend(app: &tauri::AppHandle) -> Result<Child, Box<dyn std::error::Er
                 .env("MKDSC_HOST", "127.0.0.1")
                 .env("MKDSC_PORT", "6969")
                 .env("MKDSC_AUTO_OPEN", "0")
+                .env("MKDSC_CONFIG_READONLY", "1")
                 .env("MKDSC_API_TOKEN", api_token());
             configure_backend_stdio(&mut command, data_dir);
             set_no_window(&mut command);
@@ -190,6 +199,7 @@ fn spawn_backend(app: &tauri::AppHandle) -> Result<Child, Box<dyn std::error::Er
             .env("MKDSC_HOST", "127.0.0.1")
             .env("MKDSC_PORT", "6969")
             .env("MKDSC_AUTO_OPEN", "0")
+            .env("MKDSC_CONFIG_READONLY", "1")
             .env("MKDSC_API_TOKEN", api_token());
         configure_backend_stdio(&mut command, data_dir);
         set_no_window(&mut command);

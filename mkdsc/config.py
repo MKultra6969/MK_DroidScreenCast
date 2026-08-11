@@ -74,6 +74,28 @@ _DICT_SECTIONS = (
 # from clobbering each other's read-modify-write cycles.
 _CONFIG_LOCK = threading.RLock()
 
+# Значения переменной, которые считаем включённым режимом.
+_READONLY_VALUES = ("1", "true", "yes", "on")
+
+
+class ConfigReadOnlyError(RuntimeError):
+    """Конфигом владеет другой процесс — запись из этого запрещена."""
+
+
+def _is_readonly():
+    """Режим «только чтение»; включается `MKDSC_CONFIG_READONLY=1`.
+
+    Переменную выставляет Rust-лаунчер при спавне бэкенда. В десктопной сборке
+    владелец `config.json` — Rust: он читает, мигрирует и пишет файл. Второй
+    писатель файл не повредил бы (запись атомарна), но затирал бы чужие правки
+    целиком — каждый процесс сохраняет свою версию, прочитанную до правки
+    соседа, и одно из изменений просто исчезает.
+
+    Standalone-режим (`python web_panel.py`, CLI) переменной не видит и
+    работает как раньше.
+    """
+    return os.environ.get("MKDSC_CONFIG_READONLY", "").strip().lower() in _READONLY_VALUES
+
 
 def _deep_merge(defaults, overrides):
     result = {}
@@ -216,18 +238,32 @@ def load_config():
                 loaded = {}
             merged = _deep_merge(DEFAULT_CONFIG, loaded)
             merged, changed = _migrate_config(merged)
-            if changed or merged != loaded:
+            # Самая неочевидная запись во всём модуле: она срабатывает на
+            # обычном чтении, без всякого сохранения. В режиме «только чтение»
+            # результат миграции остаётся в памяти — закрепит его владелец
+            # файла.
+            if (changed or merged != loaded) and not _is_readonly():
                 save_config(merged)
             return merged
 
         config = deepcopy(DEFAULT_CONFIG)
         config["last_update_check"] = datetime.now(timezone.utc).isoformat()
-        save_config(config)
+        # Первый запуск в десктопе: конфига ещё нет, создаст его Rust. Падать
+        # здесь означало бы не поднять бэкенд вовсе.
+        if not _is_readonly():
+            save_config(config)
         return config
 
 
 def save_config(config):
-    """Write atomically: a crash mid-write must not truncate config.json."""
+    """Write atomically: a crash mid-write must not truncate config.json.
+
+    Бросает ``ConfigReadOnlyError``, если конфигом владеет другой процесс.
+    """
+    if _is_readonly():
+        raise ConfigReadOnlyError(
+            "config.json is owned by the desktop app; this process may only read it"
+        )
     with _CONFIG_LOCK:
         CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
         payload = json.dumps(config, indent=2, ensure_ascii=False)

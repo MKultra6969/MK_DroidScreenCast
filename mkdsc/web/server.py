@@ -23,6 +23,7 @@ from starlette.concurrency import run_in_threadpool
 
 from mkdsc.constants import VERSION
 from mkdsc.config import (
+    ConfigReadOnlyError,
     load_config,
     save_config,
     replace_config,
@@ -123,6 +124,16 @@ app.include_router(service_router)
 app.include_router(connection_router)
 app.include_router(gallery_router)
 app.include_router(file_manager_router)
+
+
+@app.exception_handler(ConfigReadOnlyError)
+async def config_read_only(request, exc):
+    """409 вместо невнятного 500 из глубины ``save_config``.
+
+    Сюда попадает веб-панель, открытая рядом с десктопным приложением: конфиг
+    в этом режиме принадлежит приложению, и менять его через панель нельзя.
+    """
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
 
 
 @app.middleware("http")
