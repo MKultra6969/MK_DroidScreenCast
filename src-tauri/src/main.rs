@@ -1,5 +1,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod api;
+mod config;
+mod devices;
+mod error;
+mod paths;
+mod tools;
+
 use std::io::Write;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Mutex, OnceLock};
@@ -31,60 +38,20 @@ fn mkdsc_api_token() -> String {
     api_token().to_string()
 }
 
+/// Прячет консольное окно дочернего процесса на Windows.
+///
+/// Живёт здесь, а не в `tools.rs`: спавн внешних процессов — забота лаунчера,
+/// а `devices.rs` берёт эту же функцию через `command.as_std_mut()`, чтобы
+/// поведение не разъехалось между бэкендом и adb.
 #[cfg(windows)]
-fn set_no_window(command: &mut Command) {
+pub(crate) fn set_no_window(command: &mut Command) {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x08000000;
     command.creation_flags(CREATE_NO_WINDOW);
 }
 
 #[cfg(not(windows))]
-fn set_no_window(_command: &mut Command) {}
-
-fn resolve_base_dir(app: &tauri::AppHandle) -> std::path::PathBuf {
-    if let Some(explicit) = std::env::var_os("MKDSC_BASE_DIR") {
-        return std::path::PathBuf::from(explicit);
-    }
-
-    let mut candidates: Vec<std::path::PathBuf> = Vec::new();
-    if let Ok(dir) = app.path().resource_dir() {
-        candidates.push(dir.clone());
-        candidates.push(dir.join("app"));
-        candidates.push(dir.join("_up_"));
-    }
-    if let Ok(dir) = std::env::current_dir() {
-        candidates.push(dir.clone());
-        if let Some(parent) = dir.parent() {
-            candidates.push(parent.to_path_buf());
-        }
-    }
-
-    let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    if let Some(parent) = manifest_dir.parent() {
-        candidates.push(parent.to_path_buf());
-    }
-
-    let exe_suffix = if cfg!(windows) { ".exe" } else { "" };
-    let backend_name = format!("mkdsc-backend{exe_suffix}");
-
-    for base in candidates {
-        if base.join("tauri_backend.py").exists()
-            || base.join("bin").join(&backend_name).exists()
-            || base.join("mkdsc").exists()
-        {
-            return base;
-        }
-    }
-
-    std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
-}
-
-fn resolve_data_dir(app: &tauri::AppHandle, base_dir: &std::path::Path) -> std::path::PathBuf {
-    app.path()
-        .app_data_dir()
-        .ok()
-        .unwrap_or_else(|| base_dir.to_path_buf())
-}
+pub(crate) fn set_no_window(_command: &mut Command) {}
 
 fn configure_backend_stdio(command: &mut Command, data_dir: &std::path::Path) {
     if cfg!(debug_assertions) {
@@ -133,12 +100,12 @@ fn log_launcher_event(data_dir: &std::path::Path, message: &str) {
 }
 
 fn spawn_backend(app: &tauri::AppHandle) -> Result<Child, Box<dyn std::error::Error>> {
-    let base_dir = resolve_base_dir(app);
-    let data_dir = resolve_data_dir(app, &base_dir);
+    let base_dir = paths::base_dir(app);
+    let data_dir = paths::data_dir(app);
 
-    std::fs::create_dir_all(&data_dir)?;
+    std::fs::create_dir_all(data_dir)?;
     log_launcher_event(
-        &data_dir,
+        data_dir,
         &format!(
             "base_dir={} data_dir={} prefer_python={}",
             base_dir.display(),
@@ -164,26 +131,26 @@ fn spawn_backend(app: &tauri::AppHandle) -> Result<Child, Box<dyn std::error::Er
 
         if let Some(path) = backend_path {
             log_launcher_event(
-                &data_dir,
+                data_dir,
                 &format!("backend binary found at {}", path.display()),
             );
             let mut command = Command::new(path);
             command
-                .current_dir(&base_dir)
-                .env("MKDSC_BASE_DIR", &base_dir)
-                .env("MKDSC_DATA_DIR", &data_dir)
+                .current_dir(base_dir)
+                .env("MKDSC_BASE_DIR", base_dir)
+                .env("MKDSC_DATA_DIR", data_dir)
                 .env("MKDSC_HOST", "127.0.0.1")
                 .env("MKDSC_PORT", "6969")
                 .env("MKDSC_AUTO_OPEN", "0")
                 .env("MKDSC_API_TOKEN", api_token());
-            configure_backend_stdio(&mut command, &data_dir);
+            configure_backend_stdio(&mut command, data_dir);
             set_no_window(&mut command);
 
             return Ok(Some(command.spawn()?));
         }
 
         log_launcher_event(
-            &data_dir,
+            data_dir,
             "backend binary not found (bin/mkdsc-backend)",
         );
         Ok(None)
@@ -210,21 +177,21 @@ fn spawn_backend(app: &tauri::AppHandle) -> Result<Child, Box<dyn std::error::Er
         let script_path = base_dir.join("tauri_backend.py");
         if !script_path.exists() {
             let message = format!("backend script not found: {}", script_path.display());
-            log_launcher_event(&data_dir, &message);
+            log_launcher_event(data_dir, &message);
             return Err(message.into());
         }
 
         let mut command = Command::new(python);
         command
             .arg(script_path)
-            .current_dir(&base_dir)
-            .env("MKDSC_BASE_DIR", &base_dir)
-            .env("MKDSC_DATA_DIR", &data_dir)
+            .current_dir(base_dir)
+            .env("MKDSC_BASE_DIR", base_dir)
+            .env("MKDSC_DATA_DIR", data_dir)
             .env("MKDSC_HOST", "127.0.0.1")
             .env("MKDSC_PORT", "6969")
             .env("MKDSC_AUTO_OPEN", "0")
             .env("MKDSC_API_TOKEN", api_token());
-        configure_backend_stdio(&mut command, &data_dir);
+        configure_backend_stdio(&mut command, data_dir);
         set_no_window(&mut command);
 
         Ok(command.spawn()?)
@@ -262,7 +229,10 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
-        .invoke_handler(tauri::generate_handler![mkdsc_api_token])
+        .invoke_handler(tauri::generate_handler![
+            mkdsc_api_token,
+            api::api_devices
+        ])
         .manage(BackendState(Mutex::new(None)))
         .setup(|app| -> Result<(), Box<dyn std::error::Error>> {
             // Signed, in-place updates with a real relaunch. Replaces the old
@@ -272,7 +242,7 @@ fn main() {
             app.handle()
                 .plugin(tauri_plugin_updater::Builder::new().build())?;
 
-            let child = spawn_backend(&app.handle())?;
+            let child = spawn_backend(app.handle())?;
             let state = app.state::<BackendState>();
             if let Ok(mut guard) = state.0.lock() {
                 *guard = Some(child);

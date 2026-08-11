@@ -29,6 +29,18 @@ npm --prefix frontend run typecheck
 npm --prefix frontend run build   # also refreshes the committed static/ bundle
 ```
 
+```bash
+cd src-tauri && cargo test && cargo clippy --all-targets
+```
+
+Anything under `src-tauri` links the real Tauri crate, so even `cargo test`
+runs the Tauri build script — and that script fails unless two paths declared
+in `tauri.conf.json` already exist:
+
+- `bin/` — the backend bundle (`npm run tauri:backend:build`). An empty
+  directory is enough to satisfy the check when you only want the tests.
+- `frontend/dist-tauri/` — the desktop frontend bundle (`npm run tauri:build`).
+
 `static/` holds the bundle served by the web panel (`python web_panel.py`).
 Rebuild and commit it whenever `frontend/src` changes, or the web UI will lag
 behind the API.

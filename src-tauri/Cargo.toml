@@ -18,6 +18,13 @@ serde_json = "1"
 tauri-plugin-dialog = "2"
 tauri-plugin-process = "2"
 uuid = { version = "1", features = ["v4"] }
+# Внешние процессы (adb) запускаются из async-команд, поэтому нужен
+# именно tokio::process: std::process заблокировал бы поток рантайма.
+# Сам tokio уже приходит транзитивно с Tauri, лишнего веса тут нет.
+tokio = { version = "1", features = ["process", "time"] }
+# Для timestamp в формате `datetime.now().isoformat()` — локальное время без
+# таймзоны. Тоже уже есть в дереве зависимостей Tauri.
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 
 [target.'cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))'.dependencies]
 tauri-plugin-updater = "2"
