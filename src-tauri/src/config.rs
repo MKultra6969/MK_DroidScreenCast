@@ -183,6 +183,22 @@ fn python_int(value: &Value) -> Option<i64> {
     }
 }
 
+/// Аналог `str(value)` для тех типов, что доезжают в JSON-теле запроса.
+///
+/// Нужен ради `save_device`, где порт приводится к строке: фронтенд шлёт
+/// строку, но сторонний клиент может прислать число, и в конфиге оно обязано
+/// оказаться строкой — иначе сравнение с сохранённым портом перестанет
+/// срабатывать.
+pub fn python_str(value: &Value) -> String {
+    match value {
+        Value::String(text) => text.clone(),
+        Value::Null => "None".to_string(),
+        Value::Bool(true) => "True".to_string(),
+        Value::Bool(false) => "False".to_string(),
+        other => other.to_string(),
+    }
+}
+
 /// Слияние словарей — `mkdsc/config.py::_deep_merge`.
 ///
 /// Вложенные объекты сливаются рекурсивно, всё остальное (в том числе списки)
@@ -507,15 +523,86 @@ pub fn load_at(paths: &ConfigPaths) -> Result<Map<String, Value>, ApiError> {
     load_locked(paths)
 }
 
+/// Частичный патч: `patch` сливается с текущим конфигом.
+///
+/// Ключ патчем не удалить — для этого есть `replace_at`.
+pub fn update_at(
+    paths: &ConfigPaths,
+    patch: &Map<String, Value>,
+) -> Result<Map<String, Value>, ApiError> {
+    let _guard = lock();
+    let current = load_locked(paths)?;
+    let merged = deep_merge(&current, patch);
+    let (updated, _) = migrate_config(Value::Object(merged), &paths.legacy_devices);
+    write_atomic(&paths.config, &Value::Object(updated.clone()))?;
+    Ok(updated)
+}
+
+/// Полная замена: ключи, которых нет в `new_config`, действительно исчезают.
+///
+/// Отсутствующие секции добираются из дефолтов, чтобы приложение всё ещё
+/// стартовало.
+pub fn replace_at(
+    paths: &ConfigPaths,
+    new_config: &Map<String, Value>,
+) -> Result<Map<String, Value>, ApiError> {
+    let _guard = lock();
+    let merged = deep_merge(&default_config(), new_config);
+    let (replaced, _) = migrate_config(Value::Object(merged), &paths.legacy_devices);
+    write_atomic(&paths.config, &Value::Object(replaced.clone()))?;
+    Ok(replaced)
+}
+
+/// Читает, даёт изменить и записывает конфиг под одним замком.
+///
+/// Ради этого замка изменения устройств и пресетов идут именно сюда: два
+/// одновременных сохранения иначе прочитали бы одну и ту же версию файла и
+/// одно из них пропало бы.
+///
+/// Миграция после изменения намеренно не запускается — как и `save_config` в
+/// Python. Иначе удаление последнего пресета тут же возвращало бы дефолтные:
+/// `_migrate_config` считает пустой список пресетов поводом их восстановить.
+pub fn mutate_at<F>(paths: &ConfigPaths, apply: F) -> Result<Map<String, Value>, ApiError>
+where
+    F: FnOnce(&mut Map<String, Value>) -> Result<(), ApiError>,
+{
+    let _guard = lock();
+    let mut config = load_locked(paths)?;
+    apply(&mut config)?;
+    write_atomic(&paths.config, &Value::Object(config.clone()))?;
+    Ok(config)
+}
+
 /// См. [`load_at`].
 pub fn load(app: &AppHandle) -> Result<Map<String, Value>, ApiError> {
     load_at(&config_paths(app))
 }
 
+/// См. [`update_at`].
+pub fn update(app: &AppHandle, patch: &Map<String, Value>) -> Result<Map<String, Value>, ApiError> {
+    update_at(&config_paths(app), patch)
+}
+
+/// См. [`replace_at`].
+pub fn replace(
+    app: &AppHandle,
+    new_config: &Map<String, Value>,
+) -> Result<Map<String, Value>, ApiError> {
+    replace_at(&config_paths(app), new_config)
+}
+
+/// См. [`mutate_at`].
+pub fn mutate<F>(app: &AppHandle, apply: F) -> Result<Map<String, Value>, ApiError>
+where
+    F: FnOnce(&mut Map<String, Value>) -> Result<(), ApiError>,
+{
+    mutate_at(&config_paths(app), apply)
+}
+
 /// Сохранённые устройства из конфига — как есть, без нормализации.
 ///
-/// Форму записей задаёт сохранение устройства (`POST /api/devices/save`);
-/// фронтенд терпим к лишним полям, но `port` обязан остаться строкой.
+/// Форму записей задаёт `save_device` в `api.rs`; фронтенд терпим к лишним
+/// полям, но `port` обязан остаться строкой.
 pub fn saved_devices(app: &AppHandle) -> Result<Vec<Value>, ApiError> {
     let config = load(app)?;
     Ok(config
@@ -702,6 +789,71 @@ mod tests {
         let loaded = load_at(&paths).expect("конфиг читается");
         assert_eq!(loaded["web"]["port"], json!(6969));
         assert!(backup_path(&paths.config).exists());
+    }
+
+    /// `test_update_config_merges_but_cannot_delete` — BUG-10: POST это патч,
+    /// удалять им нельзя.
+    #[test]
+    fn update_merges_but_cannot_delete() {
+        let temp = TempDir::new("patch");
+        let paths = temp.paths();
+
+        update_at(&paths, &object(json!({"scrcpy": {"custom": "x"}}))).expect("первый патч");
+        update_at(&paths, &object(json!({"scrcpy": {}}))).expect("пустой патч");
+
+        let loaded = load_at(&paths).expect("конфиг читается");
+        assert_eq!(loaded["scrcpy"]["custom"], json!("x"));
+    }
+
+    /// Одновременные изменения не должны терять друг друга.
+    ///
+    /// Ровно ради этого `mutate_at` держит замок на всю пару «чтение —
+    /// запись»: иначе сохранение пресета и сохранение устройства прочитали бы
+    /// одну и ту же версию файла, и одна из правок исчезла бы.
+    #[test]
+    fn concurrent_mutations_all_survive() {
+        let temp = TempDir::new("concurrent");
+        let paths = temp.paths();
+        load_at(&paths).expect("конфиг создаётся");
+
+        std::thread::scope(|scope| {
+            for index in 0..8 {
+                let paths = &paths;
+                scope.spawn(move || {
+                    mutate_at(paths, |config| {
+                        let devices = config
+                            .get_mut("devices")
+                            .and_then(Value::as_array_mut)
+                            .expect("список устройств");
+                        devices.push(json!({"name": format!("device-{index}")}));
+                        Ok(())
+                    })
+                    .expect("изменение применяется");
+                });
+            }
+        });
+
+        let loaded = load_at(&paths).expect("конфиг читается");
+        assert_eq!(loaded["devices"].as_array().map(Vec::len), Some(8));
+    }
+
+    /// `test_replace_config_deletes_removed_keys`.
+    #[test]
+    fn replace_deletes_removed_keys() {
+        let temp = TempDir::new("replace");
+        let paths = temp.paths();
+
+        update_at(&paths, &object(json!({"scrcpy": {"custom": "x"}}))).expect("патч");
+        let mut full = load_at(&paths).expect("конфиг читается");
+        let scrcpy = section_mut(&mut full, "scrcpy");
+        // `shift_remove`, а не `remove`: при `preserve_order` последний
+        // переставляет ключи местами и порядок в файле поехал бы.
+        scrcpy.shift_remove("custom");
+
+        replace_at(&paths, &full).expect("полная замена");
+
+        let loaded = load_at(&paths).expect("конфиг читается");
+        assert!(!loaded["scrcpy"].as_object().unwrap().contains_key("custom"));
     }
 
     /// `test_save_config_is_atomic` — BUG-11: между усечением и записью не

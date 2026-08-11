@@ -232,9 +232,15 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             mkdsc_api_token,
             api::api_devices,
+            api::api_devices_save,
+            api::api_devices_delete,
             api::api_config,
             api::api_config_full,
-            api::api_presets
+            api::api_config_update,
+            api::api_config_replace,
+            api::api_presets,
+            api::api_presets_save,
+            api::api_presets_delete
         ])
         .manage(BackendState(Mutex::new(None)))
         .setup(|app| -> Result<(), Box<dyn std::error::Error>> {
