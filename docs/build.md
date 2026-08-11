@@ -2,6 +2,9 @@
 
 This project uses a Python backend, a React frontend, and a Tauri shell.
 
+Supported targets are **Linux x64 and Windows x64**. macOS is not supported and
+is not built in CI.
+
 ## Common prerequisites
 - Node.js 18+ (or 20+)
 - Rust **1.85 or newer** — `src-tauri` uses edition 2024, and older toolchains
@@ -12,7 +15,7 @@ This project uses a Python backend, a React frontend, and a Tauri shell.
 ```bash
 python -m venv .venv
 .\.venv\Scripts\activate  # Windows
-source .venv/bin/activate # Linux/macOS
+source .venv/bin/activate # Linux
 pip install -r requirements.txt   # requirements-dev.txt to also get PyInstaller + pytest
 npm install
 npm --prefix frontend install
@@ -108,12 +111,12 @@ npm run tauri:backend:build
 npm run tauri build
 ```
 
-## macOS (release build)
-Install Xcode Command Line Tools: `xcode-select --install`.
-```bash
-npm run tauri:backend:build
-npm run tauri build
-```
+### Minimum glibc
+
+Release artifacts are built on `ubuntu-22.04`, so they link against **glibc
+2.35**. Anything older will refuse to start with a `GLIBC_2.35 not found`
+loader error. In practice that means **Ubuntu 22.04+ / Debian 12+** or an
+equally recent distro; older systems have to build from source.
 
 ## One-shot build
 ```bash
