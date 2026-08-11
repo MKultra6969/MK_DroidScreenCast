@@ -1,66 +1,22 @@
-import shutil
-import tarfile
-import tempfile
-import zipfile
-from pathlib import Path
+"""Update checking.
 
-import requests
+Installing updates is *not* done here any more. The desktop build uses
+``tauri-plugin-updater``: signed artifacts, an atomic installer swap and a
+proper relaunch. The previous implementation downloaded the GitHub source
+zipball and copied it over ``BASE_DIR``, which:
+
+- needed admin rights in an installed app (resource dir under Program Files);
+- shipped raw .py files while the app actually runs bin/mkdsc-backend.exe;
+- never deleted files removed in the new version;
+- could not restart anything.
+
+Everything else (web panel from a clone, CLI) now points the user at the
+release page instead of pretending to self-update.
+"""
+import webbrowser
 
 from .constants import API_LATEST_RELEASE, RELEASES_URL, VERSION
-from .paths import BASE_DIR, DOWNLOADS_DIR
 from .versioning import fetch_latest_release, is_newer
-
-EXCLUDE_NAMES = {
-    ".git",
-    ".idea",
-    ".venv",
-    "__pycache__",
-    "BACKUP",
-    "config.json",
-    "downloads",
-    "logs",
-}
-
-
-def _download_file(url, dest):
-    with requests.get(url, stream=True, timeout=60) as response:
-        response.raise_for_status()
-        with open(dest, "wb") as handle:
-            for chunk in response.iter_content(chunk_size=8192):
-                if chunk:
-                    handle.write(chunk)
-
-
-def _extract_archive(archive_path, dest_dir):
-    name = archive_path.name.lower()
-    if name.endswith(".zip"):
-        with zipfile.ZipFile(archive_path, "r") as zf:
-            zf.extractall(dest_dir)
-        return
-    if name.endswith(".tar.gz") or name.endswith(".tgz"):
-        with tarfile.open(archive_path, "r:gz") as tf:
-            tf.extractall(dest_dir)
-        return
-    raise ValueError(f"Unsupported archive format: {archive_path.name}")
-
-
-def _find_root_dir(extracted_dir):
-    entries = [entry for entry in extracted_dir.iterdir() if entry.is_dir()]
-    if len(entries) == 1:
-        return entries[0]
-    return extracted_dir
-
-
-def _copy_tree(src_dir, dest_dir):
-    for item in src_dir.iterdir():
-        if item.name in EXCLUDE_NAMES:
-            continue
-        target = dest_dir / item.name
-        if item.is_dir():
-            shutil.copytree(item, target, dirs_exist_ok=True)
-        else:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(item, target)
 
 
 def check_for_updates():
@@ -72,55 +28,30 @@ def check_for_updates():
         "latest": latest,
         "update_available": update_available,
         "release": release,
+        "release_url": release.get("html_url") or RELEASES_URL,
     }
 
 
-def apply_update(release=None, logger=None):
-    release = release or fetch_latest_release(API_LATEST_RELEASE)
-    latest = release.get("tag")
+def get_release_url(release=None):
+    if isinstance(release, dict) and release.get("html_url"):
+        return release["html_url"]
+    return RELEASES_URL
 
-    if not latest or not is_newer(VERSION, latest):
-        return {
-            "success": False,
-            "message": "Already up to date.",
-            "restart_required": False,
-            "release_url": release.get("html_url") or RELEASES_URL,
-        }
 
-    archive_url = release.get("zipball_url")
-    if not archive_url:
-        return {
-            "success": False,
-            "message": "Update archive not available.",
-            "restart_required": False,
-            "release_url": release.get("html_url") or RELEASES_URL,
-        }
+def open_release_page(release=None):
+    """Open the release page in the user's browser.
 
-    DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
-    updates_dir = DOWNLOADS_DIR / "updates"
-    updates_dir.mkdir(exist_ok=True)
-
-    if logger:
-        logger.info("Downloading update %s", latest)
-
-    with tempfile.TemporaryDirectory(dir=str(updates_dir)) as tmp_dir:
-        tmp_path = Path(tmp_dir)
-        archive_path = tmp_path / "update.zip"
-        _download_file(archive_url, archive_path)
-
-        extract_dir = tmp_path / "extract"
-        extract_dir.mkdir()
-        _extract_archive(archive_path, extract_dir)
-
-        source_root = _find_root_dir(extract_dir)
-        _copy_tree(source_root, BASE_DIR)
-
-    if logger:
-        logger.info("Update applied to %s", latest)
-
+    Used by the CLI and the from-source menu; the desktop app never gets here
+    because the Tauri updater installs in place.
+    """
+    url = get_release_url(release)
+    opened = False
+    try:
+        opened = bool(webbrowser.open(url))
+    except Exception:
+        opened = False
     return {
-        "success": True,
-        "message": f"Updated to {latest}. Restart the app to finish.",
-        "restart_required": True,
-        "release_url": release.get("html_url") or RELEASES_URL,
+        "success": opened,
+        "opened": opened,
+        "release_url": url,
     }

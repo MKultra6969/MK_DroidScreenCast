@@ -11,14 +11,17 @@
 """
 import json
 import math
+import shutil
 import subprocess
 from datetime import datetime
+from pathlib import Path
 from typing import Optional, List
+from uuid import uuid4
 from fastapi import APIRouter, HTTPException, Request, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
-from mkdsc.paths import get_screenshots_dir
+from mkdsc.paths import DATA_DIR, get_downloads_base_dir, get_screenshots_dir
 
 router = APIRouter(prefix="/api/screenshots", tags=["screenshots"])
 
@@ -44,6 +47,11 @@ class CaptionUpdate(BaseModel):
     caption: str
 
 
+class SaveRequest(BaseModel):
+    """Запрос на сохранение скриншота в локальную папку."""
+    destination_dir: Optional[str] = None
+
+
 def _resolve_adb_path(request: Request):
     adb_path = getattr(request.app.state, "adb_path", None)
     if adb_path:
@@ -67,13 +75,25 @@ def ensure_dir():
 
 
 def load_metadata() -> List[dict]:
-    """Загружает метаданные скриншотов."""
+    """Загружает метаданные скриншотов.
+
+    Битый metadata.json переименовывается в .corrupt, а не затирается молча
+    при первом же сохранении вместе со всеми подписями.
+    """
     ensure_dir()
+    _, metadata_file = _resolve_paths()
     try:
-        _, metadata_file = _resolve_paths()
-        return json.loads(metadata_file.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, Exception):
+        data = json.loads(metadata_file.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        try:
+            metadata_file.replace(metadata_file.with_suffix(".json.corrupt"))
+        except OSError:
+            pass
         return []
+
+    if not isinstance(data, list):
+        return []
+    return [entry for entry in data if isinstance(entry, dict) and entry.get("id")]
 
 
 def save_metadata(data: List[dict]):
@@ -137,13 +157,14 @@ async def take_screenshot(request: Request, serial: Optional[str] = None, captio
         raise HTTPException(status_code=500, detail=str(exc))
     ensure_dir()
     
-    # Генерируем уникальный ID и имя файла
+    # Секундной точности не хватало: два скриншота в одну секунду получали
+    # одинаковый id и одно имя файла — второй затирал первый.
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    screenshot_id = timestamp
-    filename = f"screenshot_{timestamp}.png"
+    screenshot_id = uuid4().hex
+    filename = f"screenshot_{timestamp}_{screenshot_id[:8]}.png"
     screenshots_dir, _ = _resolve_paths()
     local_path = screenshots_dir / filename
-    device_path = f"/sdcard/screenshot_{timestamp}.png"
+    device_path = f"/sdcard/{filename}"
     
     # Формируем базовую команду
     cmd_base = [str(adb_path)]
@@ -235,6 +256,41 @@ async def get_screenshot(screenshot_id: str):
         media_type="image/png",
         filename=entry["filename"]
     )
+
+
+@router.post("/{screenshot_id}/save")
+async def save_screenshot(screenshot_id: str, payload: Optional[SaveRequest] = None):
+    """Сохраняет скриншот в локальную папку.
+
+    В десктопной сборке скачивание через blob + <a download> в WebView не
+    работает, поэтому файл кладёт сам бэкенд.
+    """
+    metadata = load_metadata()
+    entry = next((s for s in metadata if s.get("id") == screenshot_id), None)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Screenshot not found")
+
+    screenshots_dir, _ = _resolve_paths()
+    source = screenshots_dir / entry["filename"]
+    if not source.exists():
+        raise HTTPException(status_code=404, detail="Screenshot file not found")
+
+    destination_dir = (payload.destination_dir if payload else None) or ""
+    if destination_dir:
+        target_dir = Path(destination_dir).expanduser()
+    else:
+        from mkdsc.config import load_config
+        base_dir = get_downloads_base_dir(load_config())
+        target_dir = (base_dir / "downloads") if base_dir == DATA_DIR else base_dir
+
+    try:
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target_path = target_dir / entry["filename"]
+        await run_in_threadpool(shutil.copy2, source, target_path)
+    except OSError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {"success": True, "path": str(target_path)}
 
 
 @router.put("/{screenshot_id}/caption")

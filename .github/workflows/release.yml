@@ -1,0 +1,84 @@
+name: Release
+
+# Builds signed desktop installers and publishes them together with the
+# latest.json feed that tauri-plugin-updater reads.
+#
+# Required repository secrets:
+#   TAURI_SIGNING_PRIVATE_KEY           - contents of the key from `tauri signer generate`
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD  - its password (empty string if none)
+# The matching public key must be in src-tauri/tauri.conf.json -> plugins.updater.pubkey.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            args: ''
+          - platform: ubuntu-22.04
+            args: ''
+          - platform: macos-latest
+            args: '--target aarch64-apple-darwin'
+          - platform: macos-latest
+            args: '--target x86_64-apple-darwin'
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.85'
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install Python build dependencies
+        run: pip install -r requirements-dev.txt
+
+      # PyInstaller bundle the Tauri launcher spawns as bin/mkdsc-backend.
+      - name: Build backend binary
+        run: npm run tauri:backend:build
+
+      - name: Install npm dependencies
+        run: |
+          npm ci
+          npm --prefix frontend ci
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: v__VERSION__
+          releaseName: 'MK DroidScreenCast v__VERSION__'
+          releaseDraft: true
+          prerelease: false
+          includeUpdaterJson: true
+          args: ${{ matrix.args }}

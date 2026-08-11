@@ -3,9 +3,11 @@
 Предоставляет быстрый доступ к диагностике устройства.
 
 Эндпоинты:
-- GET /api/service/{command_name} - выполнить предопределённую команду
-- POST /api/service/custom - выполнить кастомную ADB команду
+- GET  /api/service/commands           - список предопределённых команд
+- POST /api/service/{command_name}     - выполнить предопределённую команду
+- POST /api/service/custom             - выполнить произвольную ADB команду
 """
+import re
 import shlex
 import subprocess
 from fastapi import APIRouter, HTTPException, Request
@@ -33,14 +35,56 @@ PREDEFINED_COMMANDS = {
     "thermal": ("dumpsys thermalservice", 120),
 }
 
+COMMAND_DESCRIPTIONS = {
+    "battery": "Battery status and health",
+    "wifi": "WiFi connection info",
+    "top": "Running processes (top)",
+    "props": "System properties",
+    "memory": "Memory info (/proc/meminfo)",
+    "cpu": "CPU info (/proc/cpuinfo)",
+    "disk": "Disk usage (df -h)",
+    "packages": "Installed packages",
+    "screen": "Screen size and density",
+    "processes": "Process list (ps)",
+    "uptime": "Device uptime",
+    "network": "Network interfaces",
+    "thermal": "Thermal service status",
+}
+
 CommandSpec = Union[str, Sequence[str]]
 SHELL_META_CHARS = set("|&;<>()$`\\\n")
+
+# Диагностические утилиты, которые ничего не ломают. Всё остальное требует
+# явного подтверждения от пользователя (confirm=true).
+SAFE_BINARIES = frozenset({
+    "cat", "cmd", "date", "df", "dmesg", "du", "dumpsys", "echo", "free",
+    "getprop", "grep", "head", "hostname", "id", "ifconfig", "ip", "ls",
+    "lsof", "netstat", "printenv", "ps", "pwd", "sed", "sort", "stat",
+    "tail", "top", "uname", "uniq", "uptime", "wc", "whoami", "wm",
+})
+
+# Команды, которые не выполняются никогда — ни с каким подтверждением.
+HARD_BLOCKED_BINARIES = frozenset({
+    "fastboot", "flash_image", "mkfs", "mke2fs", "newfs_msdos", "recovery",
+})
+
+# Пути, удаление которых равносильно порче устройства.
+_PROTECTED_TARGETS = frozenset({
+    "/", "/*", "/system", "/data", "/vendor", "/sdcard", "/storage",
+    "/storage/emulated", "/storage/emulated/0", "/mnt", "/proc", "/dev",
+})
+
+_PIPELINE_SPLIT_RE = re.compile(r"\|\||&&|[|;\n]")
+_UNSAFE_CONSTRUCTS_RE = re.compile(r"[<>`]|\$\(")
 
 
 class CommandRequest(BaseModel):
     """Запрос на выполнение кастомной команды."""
     command: str
     serial: Optional[str] = None
+    # UI обязан показать предупреждение и передать confirm=true, чтобы
+    # выполнить что-то за пределами диагностического списка.
+    confirm: bool = False
 
 
 class CommandResponse(BaseModel):
@@ -77,6 +121,84 @@ def _decode_output(raw: Optional[bytes]) -> str:
 
 def _needs_shell(command: str) -> bool:
     return any(ch in command for ch in SHELL_META_CHARS)
+
+
+def _tokenize(segment: str) -> list[str]:
+    try:
+        return shlex.split(segment)
+    except ValueError:
+        # Незакрытая кавычка — считаем небезопасным, пусть подтверждает.
+        return []
+
+
+def _binary_name(token: str) -> str:
+    return token.rsplit("/", 1)[-1].lower()
+
+
+def validate_custom_command(command: str, confirm: bool = False) -> None:
+    """Пропускает диагностические команды, остальное — только с confirm.
+
+    Прежний блок-лист подстрок не ловил ни `rm -r /sdcard`, ни `dd`, зато
+    блокировал безобидный `dumpsys | grep format`.
+    """
+    text = (command or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Command required")
+    if len(text) > 2000:
+        raise HTTPException(status_code=400, detail="Command too long")
+
+    segments = [part.strip() for part in _PIPELINE_SPLIT_RE.split(text) if part.strip()]
+    if not segments:
+        raise HTTPException(status_code=400, detail="Command required")
+
+    unsafe_reasons = []
+    if _UNSAFE_CONSTRUCTS_RE.search(text):
+        unsafe_reasons.append("redirection or command substitution")
+
+    for segment in segments:
+        tokens = _tokenize(segment)
+        if not tokens:
+            unsafe_reasons.append("unparsable command")
+            continue
+
+        binary = _binary_name(tokens[0])
+
+        if binary in HARD_BLOCKED_BINARIES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Command '{binary}' is never allowed from the web panel",
+            )
+
+        if binary == "reboot" and any(
+            arg.lower() in {"bootloader", "recovery", "fastboot", "edl"} for arg in tokens[1:]
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="Rebooting into bootloader/recovery is not allowed from the web panel",
+            )
+
+        if binary in {"rm", "rmdir"}:
+            for arg in tokens[1:]:
+                if arg.startswith("-"):
+                    continue
+                if arg.rstrip("/") in _PROTECTED_TARGETS or arg in _PROTECTED_TARGETS:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Refusing to delete protected path '{arg}'",
+                    )
+
+        if binary not in SAFE_BINARIES:
+            unsafe_reasons.append(f"'{binary}' is not a read-only diagnostic command")
+
+    if unsafe_reasons and not confirm:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "This command can modify the device ("
+                + "; ".join(sorted(set(unsafe_reasons)))
+                + "). Re-send with confirm=true to run it anyway."
+            ),
+        )
 
 
 def _build_adb_command(adb_path: str, serial: Optional[str], command: str) -> list[str]:
@@ -145,12 +267,12 @@ def run_adb_command(
 ) -> CommandResponse:
     """
     Выполняет ADB команду и возвращает результат.
-    
+
     Args:
         adb_path: Путь к исполняемому файлу adb
         command: Команда для выполнения (без префикса 'adb')
         serial: Серийный номер устройства (опционально)
-    
+
     Returns:
         CommandResponse с результатом выполнения
     """
@@ -183,80 +305,25 @@ async def list_available_commands():
     """Возвращает список доступных предопределённых команд."""
     return {
         "commands": list(PREDEFINED_COMMANDS.keys()),
-        "descriptions": {
-            "battery": "Battery status and health",
-            "wifi": "WiFi connection info",
-            "top": "Running processes (top)",
-            "props": "System properties",
-            "memory": "Memory info (/proc/meminfo)",
-            "cpu": "CPU info (/proc/cpuinfo)",
-            "disk": "Disk usage (df -h)",
-            "packages": "Installed packages",
-            "screen": "Screen size and density",
-            "processes": "Process list (ps)",
-            "uptime": "Device uptime",
-            "network": "Network interfaces",
-            "thermal": "Thermal service status",
-        }
+        "descriptions": COMMAND_DESCRIPTIONS,
     }
-
-
-@router.get("/{command_name}")
-async def run_predefined_command(command_name: str, request: Request, serial: Optional[str] = None):
-    """
-    Выполняет предопределённую ADB команду.
-    
-    Args:
-        command_name: Имя команды из списка PREDEFINED_COMMANDS
-        serial: Серийный номер устройства (опционально)
-    """
-    if command_name not in PREDEFINED_COMMANDS:
-        raise HTTPException(
-            status_code=404, 
-            detail=f"Unknown command: {command_name}. Available: {list(PREDEFINED_COMMANDS.keys())}"
-        )
-    
-    try:
-        adb_path = _resolve_adb_path(request)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
-    command, max_lines = PREDEFINED_COMMANDS[command_name]
-
-    return await run_in_threadpool(run_adb_command, adb_path, command, serial, max_lines, DEFAULT_TIMEOUT_SECONDS)
 
 
 @router.post("/custom")
 async def run_custom_command(request: CommandRequest, http_request: Request):
     """
     Выполняет кастомную ADB команду.
-    
-    ВНИМАНИЕ: Опасные команды блокируются для безопасности.
+
+    Диагностические команды выполняются сразу; всё, что может изменить
+    устройство, требует confirm=true.
     """
-    # Базовая валидация безопасности
-    dangerous_patterns = [
-        "rm -rf /",
-        "rm -rf /*",
-        "format",
-        "wipe",
-        "factory",
-        "reboot bootloader",
-        "reboot recovery",
-        "flash",
-    ]
-    
-    command_lower = request.command.lower()
-    for pattern in dangerous_patterns:
-        if pattern in command_lower:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Dangerous command blocked: contains '{pattern}'"
-            )
-    
+    validate_custom_command(request.command, request.confirm)
+
     try:
         adb_path = _resolve_adb_path(http_request)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
-    
+
     return await run_in_threadpool(
         run_adb_command,
         adb_path,
@@ -265,3 +332,26 @@ async def run_custom_command(request: CommandRequest, http_request: Request):
         None,
         DEFAULT_TIMEOUT_SECONDS
     )
+
+
+@router.post("/{command_name}")
+async def run_predefined_command(command_name: str, request: Request, serial: Optional[str] = None):
+    """
+    Выполняет предопределённую ADB команду.
+
+    POST, а не GET: GET-запрос выполняется браузером «просто так» (префетч,
+    вкладка со сторонним скриптом), а этот эндпоинт запускает команду.
+    """
+    if command_name not in PREDEFINED_COMMANDS:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown command: {command_name}. Available: {list(PREDEFINED_COMMANDS.keys())}"
+        )
+
+    try:
+        adb_path = _resolve_adb_path(request)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    command, max_lines = PREDEFINED_COMMANDS[command_name]
+
+    return await run_in_threadpool(run_adb_command, adb_path, command, serial, max_lines, DEFAULT_TIMEOUT_SECONDS)

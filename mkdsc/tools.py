@@ -2,6 +2,8 @@ import os
 import platform
 import shutil
 import subprocess
+import tarfile
+import zipfile
 from pathlib import Path
 
 import requests
@@ -9,6 +11,25 @@ import requests
 from .paths import BASE_DIR, DOWNLOADS_DIR
 
 _TOOL_CACHE = {}
+
+# Ни один вызов adb не должен висеть вечно: он блокирует вызывающий поток,
+# а в вебе — обработчик запроса.
+DEFAULT_CMD_TIMEOUT = 20
+TIMEOUT_RETURNCODE = 124
+
+# Каталоги, в которые бессмысленно спускаться в поисках adb/scrcpy.
+_IGNORED_SEARCH_DIRS = frozenset({
+    "node_modules",
+    "target",
+    "dist",
+    "dist-tauri",
+    "site-packages",
+    "__pycache__",
+    "recordings",
+    "screenshots",
+    "logs",
+})
+_MAX_SEARCH_DEPTH = 5
 
 PLATFORM_TOOLS_URLS = {
     "windows": "https://dl.google.com/android/repository/platform-tools-latest-windows.zip",
@@ -18,11 +39,21 @@ PLATFORM_TOOLS_URLS = {
 SCRCPY_API_URL = "https://api.github.com/repos/Genymobile/scrcpy/releases/latest"
 
 
-def run_cmd(cmd, cwd=None, show_output=False):
+def run_cmd(cmd, cwd=None, show_output=False, timeout=DEFAULT_CMD_TIMEOUT):
     if show_output:
         print("> " + " ".join(map(str, cmd)))
 
-    result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+    try:
+        result = subprocess.run(
+            cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout
+        )
+    except subprocess.TimeoutExpired as exc:
+        result = subprocess.CompletedProcess(
+            args=cmd,
+            returncode=TIMEOUT_RETURNCODE,
+            stdout=exc.stdout or "",
+            stderr=f"Command timed out after {timeout} seconds",
+        )
 
     if show_output:
         if result.stdout:
@@ -33,6 +64,35 @@ def run_cmd(cmd, cwd=None, show_output=False):
     return result
 
 
+def _walk_for_file(root: Path, filename: str, max_depth: int = _MAX_SEARCH_DEPTH):
+    """Ищет файл вглубь, но не заходит в node_modules/.venv/target и т.п.
+
+    Раньше сюда попадал корень проекта целиком, и один промах кэша стоил
+    обхода десятков тысяч файлов.
+    """
+    stack = [(root, 0)]
+    while stack:
+        current, depth = stack.pop()
+        try:
+            entries = list(current.iterdir())
+        except OSError:
+            continue
+        for entry in entries:
+            try:
+                is_dir = entry.is_dir()
+            except OSError:
+                continue
+            if is_dir:
+                if depth >= max_depth:
+                    continue
+                if entry.name in _IGNORED_SEARCH_DIRS or entry.name.startswith("."):
+                    continue
+                stack.append((entry, depth + 1))
+            elif entry.name == filename:
+                return entry
+    return None
+
+
 def _find_exe(filename):
     search_roots = [
         DOWNLOADS_DIR,
@@ -40,39 +100,99 @@ def _find_exe(filename):
         BASE_DIR / "bin",
         BASE_DIR,
     ]
+    seen = set()
     for root in search_roots:
-        if root.exists():
-            local_path = next(root.glob(f"**/{filename}"), None)
-            if local_path:
-                return local_path
+        resolved = str(root)
+        if resolved in seen or not root.exists():
+            continue
+        seen.add(resolved)
+        local_path = _walk_for_file(root, filename)
+        if local_path:
+            return local_path
     path = shutil.which(filename)
     if path:
         return Path(path)
     return None
 
 
-def _download_file(url, dest):
+# Прогресс первичной подготовки инструментов: сервер отдаёт его в
+# /api/bootstrap/status, чтобы UI показывал загрузку, а не вечную крутилку.
+_BOOTSTRAP_STATUS = {
+    "stage": "idle",
+    "tool": "",
+    "downloaded_bytes": 0,
+    "total_bytes": 0,
+}
+
+
+def get_bootstrap_status():
+    return dict(_BOOTSTRAP_STATUS)
+
+
+def _set_bootstrap_status(**values):
+    _BOOTSTRAP_STATUS.update(values)
+
+
+def _download_file(url, dest, tool_name=""):
     with requests.get(url, stream=True, timeout=30) as response:
         response.raise_for_status()
+        try:
+            total = int(response.headers.get("content-length") or 0)
+        except (TypeError, ValueError):
+            total = 0
+        _set_bootstrap_status(
+            stage="downloading", tool=tool_name, downloaded_bytes=0, total_bytes=total
+        )
+        received = 0
         with open(dest, "wb") as handle:
             for chunk in response.iter_content(chunk_size=8192):
                 if chunk:
                     handle.write(chunk)
+                    received += len(chunk)
+                    _set_bootstrap_status(downloaded_bytes=received)
+
+
+def _assert_within(dest_dir: Path, member_name: str) -> None:
+    """Не даём записи вида '../../Startup/evil.bat' уйти из целевой папки."""
+    name = (member_name or "").replace("\\", "/")
+    if not name or name.startswith("/") or (len(name) > 1 and name[1] == ":"):
+        raise ValueError(f"Unsafe archive entry: {member_name!r}")
+    target = (dest_dir / name).resolve()
+    if target != dest_dir and not target.is_relative_to(dest_dir):
+        raise ValueError(f"Unsafe archive entry: {member_name!r}")
+
+
+def safe_extract_zip(archive_path: Path, dest_dir: Path) -> None:
+    dest_dir = Path(dest_dir).resolve()
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(archive_path, "r") as zf:
+        for member in zf.infolist():
+            _assert_within(dest_dir, member.filename)
+        zf.extractall(dest_dir)
+
+
+def safe_extract_tar(archive_path: Path, dest_dir: Path, mode: str = "r:gz") -> None:
+    dest_dir = Path(dest_dir).resolve()
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(archive_path, mode) as tf:
+        if hasattr(tarfile, "data_filter"):
+            # 3.12+: отбрасывает абсолютные пути, '..', устройства и симлинки наружу.
+            tf.extractall(dest_dir, filter="data")
+            return
+        for member in tf.getmembers():
+            if member.issym() or member.islnk():
+                _assert_within(dest_dir, member.linkname)
+            _assert_within(dest_dir, member.name)
+        tf.extractall(dest_dir)
 
 
 def _extract_archive(archive_path):
     name = archive_path.name.lower()
     if name.endswith(".zip"):
-        import zipfile
-
-        with zipfile.ZipFile(archive_path, "r") as zf:
-            zf.extractall(DOWNLOADS_DIR)
+        safe_extract_zip(archive_path, DOWNLOADS_DIR)
         return
     if name.endswith(".tar.gz") or name.endswith(".tgz"):
-        import tarfile
-
-        with tarfile.open(archive_path, "r:gz") as tf:
-            tf.extractall(DOWNLOADS_DIR)
+        safe_extract_tar(archive_path, DOWNLOADS_DIR)
         return
     raise ValueError(f"Unsupported archive format: {archive_path.name}")
 
@@ -80,7 +200,8 @@ def _extract_archive(archive_path):
 def _download_and_extract(name, url, archive_name=None):
     archive_name = archive_name or f"{name}.zip"
     archive_path = DOWNLOADS_DIR / archive_name
-    _download_file(url, archive_path)
+    _download_file(url, archive_path, tool_name=name)
+    _set_bootstrap_status(stage="extracting", tool=name)
     _extract_archive(archive_path)
     archive_path.unlink(missing_ok=True)
 
@@ -251,8 +372,11 @@ def _ensure_scrcpy():
 
 
 def ensure_tools():
+    _set_bootstrap_status(stage="checking", tool="adb")
     adb_path = _ensure_adb()
+    _set_bootstrap_status(stage="checking", tool="scrcpy")
     scrcpy_path = _ensure_scrcpy()
+    _set_bootstrap_status(stage="ready", tool="", downloaded_bytes=0, total_bytes=0)
     return adb_path, scrcpy_path
 
 
@@ -266,12 +390,23 @@ def get_tool_path(name):
 
 
 def start_adb_server(adb_path):
-    run_cmd([str(adb_path), "kill-server"], show_output=False)
-    run_cmd([str(adb_path), "start-server"], show_output=False)
+    """start-server идемпотентен.
+
+    Раньше здесь был kill-server, который на каждом запуске отваливал
+    Android Studio / Flutter / любой другой инструмент пользователя.
+    """
+    run_cmd([str(adb_path), "start-server"], show_output=False, timeout=30)
+
+
+def restart_adb_server(adb_path):
+    """Явный перезапуск — только по кнопке в диагностике."""
+    run_cmd([str(adb_path), "kill-server"], show_output=False, timeout=30)
+    run_cmd([str(adb_path), "start-server"], show_output=False, timeout=30)
 
 
 def stop_adb_server(adb_path):
-    run_cmd([str(adb_path), "kill-server"], show_output=False)
+    """Оставляем общий adb-сервер жить: его могут использовать другие программы."""
+    return
 
 
 def get_connected_devices(adb_path):
@@ -287,26 +422,31 @@ def get_connected_devices(adb_path):
     return devices
 
 
-def adb_shell_get(adb_path, prop):
-    result = run_cmd([str(adb_path), "shell", "getprop", prop], show_output=False)
+def _adb_cmd(adb_path, serial, *args):
+    cmd = [str(adb_path)]
+    if serial:
+        cmd.extend(["-s", str(serial)])
+    cmd.extend(args)
+    return cmd
+
+
+def adb_shell_get(adb_path, prop, serial=None):
+    result = run_cmd(_adb_cmd(adb_path, serial, "shell", "getprop", prop), show_output=False)
     if result.returncode != 0:
         return None
     value = result.stdout.strip()
     return value or None
 
 
-def get_device_info(adb_path):
+def get_device_info(adb_path, serial=None):
     return {
-        "model": adb_shell_get(adb_path, "ro.product.model"),
-        "android_version": adb_shell_get(adb_path, "ro.build.version.release"),
+        "model": adb_shell_get(adb_path, "ro.product.model", serial),
+        "android_version": adb_shell_get(adb_path, "ro.build.version.release", serial),
     }
 
 
 def get_device_wifi_ip(adb_path, serial=None):
-    cmd = [str(adb_path)]
-    if serial:
-        cmd.extend(["-s", serial])
-    cmd.extend(["shell", "ip", "addr", "show", "wlan0"])
+    cmd = _adb_cmd(adb_path, serial, "shell", "ip", "addr", "show", "wlan0")
     result = run_cmd(cmd, show_output=False)
     if result.returncode != 0:
         return None
@@ -319,17 +459,33 @@ def get_device_wifi_ip(adb_path, serial=None):
     return None
 
 
-def get_setting(adb_path, namespace, key):
-    result = run_cmd([str(adb_path), "shell", "settings", "get", namespace, key], show_output=False)
+def get_setting(adb_path, namespace, key, serial=None):
+    result = run_cmd(
+        _adb_cmd(adb_path, serial, "shell", "settings", "get", namespace, key),
+        show_output=False,
+    )
     if result.returncode != 0:
         return None
     value = result.stdout.strip()
     return value if value != "null" else None
 
 
-def put_setting(adb_path, namespace, key, value):
-    run_cmd([str(adb_path), "shell", "settings", "put", namespace, key, str(value)], show_output=False)
+def put_setting(adb_path, namespace, key, value, serial=None):
+    """Возвращает True, если настройка применилась.
+
+    Без -s adb с двумя устройствами отвечает 'more than one device', и
+    «не гасить экран» молча не работало.
+    """
+    result = run_cmd(
+        _adb_cmd(adb_path, serial, "shell", "settings", "put", namespace, key, str(value)),
+        show_output=False,
+    )
+    return result.returncode == 0
 
 
-def delete_setting(adb_path, namespace, key):
-    run_cmd([str(adb_path), "shell", "settings", "delete", namespace, key], show_output=False)
+def delete_setting(adb_path, namespace, key, serial=None):
+    result = run_cmd(
+        _adb_cmd(adb_path, serial, "shell", "settings", "delete", namespace, key),
+        show_output=False,
+    )
+    return result.returncode == 0

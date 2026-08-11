@@ -53,6 +53,12 @@ src-tauri/target/
 # Environment files
 .env
 .env.*
+# Not a secret — just the localhost address of the backend. Without it a clean
+# clone builds a desktop app whose requests never reach 127.0.0.1:6969.
+!frontend/.env.tauri
+
+# Config is mutated at runtime; ship config.example.json instead.
+config.json
 
 # OS / IDE
 .DS_Store

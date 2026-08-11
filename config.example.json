@@ -47,11 +47,6 @@
         "name": "4K",
         "bitrate": "32M",
         "maxsize": "2160"
-      },
-      {
-        "name": "Main",
-        "bitrate": "100M",
-        "maxsize": "1080"
       }
     ],
     "stay_awake": false,
@@ -61,5 +56,5 @@
     "turn_screen_off": false
   },
   "devices": [],
-  "last_update_check": "2026-01-11T16:33:34.516489"
+  "last_update_check": null
 }

@@ -1,0 +1,5 @@
+-r requirements.txt
+
+# Build-time only: PyInstaller pulls ~30 MB and is not needed at runtime.
+PyInstaller>=6.6,<7
+pytest>=8.2,<9

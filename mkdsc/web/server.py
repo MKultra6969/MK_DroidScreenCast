@@ -1,9 +1,11 @@
 import asyncio
+import json
 import platform
 import threading
 import subprocess
 import signal
 import zipfile
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 import re
@@ -17,9 +19,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.background import BackgroundTask
+from starlette.concurrency import run_in_threadpool
 
 from mkdsc.constants import VERSION
-from mkdsc.config import load_config, save_config, update_config as apply_config_patch
+from mkdsc.config import (
+    load_config,
+    save_config,
+    replace_config,
+    update_config as apply_config_patch,
+)
 from mkdsc.devices import list_devices, remove_device, save_device
 from mkdsc.i18n import available_languages
 from mkdsc.i18n.lexicon_web import LEXICON_WEB
@@ -34,35 +42,87 @@ from mkdsc.paths import (
 from mkdsc.tools import (
     delete_setting,
     ensure_tools,
+    get_bootstrap_status,
     get_connected_devices,
-    get_device_info,
     get_device_wifi_ip,
     get_setting,
     put_setting,
+    restart_adb_server,
     run_cmd,
     start_adb_server,
-    stop_adb_server,
 )
-from mkdsc.updater import apply_update, check_for_updates
+from mkdsc.updater import check_for_updates
+from mkdsc.web.security import (
+    CORS_ORIGIN_REGEX,
+    TOKEN_HEADER,
+    extract_token,
+    get_api_token,
+    is_allowed_host,
+    is_allowed_origin,
+    token_matches,
+)
 from mkdsc.web.service_commands import router as service_router
 from mkdsc.web.connection_optimizer import router as connection_router
 from mkdsc.web.gallery import router as gallery_router
 from mkdsc.web.file_manager import router as file_manager_router
 
-app = FastAPI(title="MK DroidScreenCast Web Panel")
+# Пути, которым токен не нужен: сама страница и её статика.
+PUBLIC_PATH_PREFIXES = ("/static",)
+PUBLIC_PATHS = {"/", "/favicon.ico", "/index.html"}
+
+RECORDING_STOP_TIMEOUT = 45
+
+
+async def _bootstrap_tools(app: FastAPI):
+    """Готовит adb/scrcpy в фоне.
+
+    Раньше это происходило в startup-хуке: uvicorn не принимал соединения,
+    пока не скачает ~150 МБ, а при ошибке сети не стартовал вовсе.
+    """
+    app.state.bootstrap_error = None
+    try:
+        adb_path, scrcpy_path = await asyncio.to_thread(ensure_tools)
+        app.state.adb_path = adb_path
+        app.state.scrcpy_path = scrcpy_path
+        await asyncio.to_thread(start_adb_server, adb_path)
+        app.state.logger.info("tools ready: adb=%s scrcpy=%s", adb_path, scrcpy_path)
+    except Exception as exc:
+        app.state.bootstrap_error = str(exc)
+        app.state.logger.exception("tool bootstrap failed")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.config = load_config()
+    app.state.logger, _ = init_logging("web", app.state.config)
+    app.state.logger.info("version: %s", VERSION)
+    app.state.logger.info("start: %s", datetime.now().isoformat())
+
+    app.state.adb_path = None
+    app.state.scrcpy_path = None
+    app.state.bootstrap_error = None
+    app.state.recording = None
+    app.state.recording_last_error = None
+    app.state.bind_host = getattr(app.state, "bind_host", "")
+
+    bootstrap_task = asyncio.create_task(_bootstrap_tools(app))
+
+    yield
+
+    bootstrap_task.cancel()
+    try:
+        await bootstrap_task
+    except (asyncio.CancelledError, Exception):
+        pass
+
+
+app = FastAPI(title="MK DroidScreenCast Web Panel", lifespan=lifespan)
 
 # Подключаем роутеры новых модулей
 app.include_router(service_router)
 app.include_router(connection_router)
 app.include_router(gallery_router)
 app.include_router(file_manager_router)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 @app.middleware("http")
@@ -74,6 +134,48 @@ async def log_exceptions(request, call_next):
         if logger:
             logger.exception("Unhandled error: %s %s", request.method, request.url.path)
         return JSONResponse(status_code=500, content={"detail": str(exc)})
+
+
+def _needs_token(path: str) -> bool:
+    if path in PUBLIC_PATHS:
+        return False
+    return not any(path.startswith(prefix) for prefix in PUBLIC_PATH_PREFIXES)
+
+
+@app.middleware("http")
+async def enforce_local_access(request, call_next):
+    """Origin + Host + токен.
+
+    Без этого любая открытая в браузере вкладка могла читать, скачивать и
+    удалять файлы подключённого телефона через fetch на 127.0.0.1:6969.
+    """
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
+    if not is_allowed_host(request.headers.get("host", ""), getattr(app.state, "bind_host", "")):
+        return JSONResponse(status_code=403, content={"detail": "Host header not allowed"})
+
+    if not is_allowed_origin(request.headers.get("origin", "")):
+        return JSONResponse(status_code=403, content={"detail": "Origin not allowed"})
+
+    if _needs_token(request.url.path):
+        token = extract_token(request.headers, request.query_params)
+        if not token_matches(token):
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Missing or invalid API token"},
+            )
+
+    return await call_next(request)
+
+
+# Добавляется последним => выполняется первым и сам отвечает на preflight.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=CORS_ORIGIN_REGEX,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", TOKEN_HEADER],
+)
 
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
 TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
@@ -89,9 +191,31 @@ def _save_config(config):
     save_config(config)
 
 
+def _require_adb():
+    adb_path = getattr(app.state, "adb_path", None)
+    if adb_path:
+        return adb_path
+    detail = getattr(app.state, "bootstrap_error", None) or "adb is still being prepared"
+    raise HTTPException(status_code=503, detail=detail)
+
+
+def _require_scrcpy():
+    scrcpy_path = getattr(app.state, "scrcpy_path", None)
+    if scrcpy_path:
+        return scrcpy_path
+    detail = getattr(app.state, "bootstrap_error", None) or "scrcpy is still being prepared"
+    raise HTTPException(status_code=503, detail=detail)
+
+
+def _tool_version(tool_path, args):
+    if not tool_path:
+        return "not available"
+    return run_cmd([str(tool_path)] + args, show_output=False).stdout
+
+
 def _create_logs_zip(zip_path: Path):
-    adb_version = run_cmd([str(app.state.adb_path), "version"], show_output=False).stdout
-    scrcpy_version = run_cmd([str(app.state.scrcpy_path), "--version"], show_output=False).stdout
+    adb_version = _tool_version(getattr(app.state, "adb_path", None), ["version"])
+    scrcpy_version = _tool_version(getattr(app.state, "scrcpy_path", None), ["--version"])
     logs_dir = get_logs_dir()
 
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as archive:
@@ -129,35 +253,36 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
-@app.on_event("startup")
-async def startup_event():
-    app.state.config = _get_config()
-    app.state.logger, _ = init_logging("web", app.state.config)
-    app.state.logger.info("version: %s", VERSION)
-    app.state.logger.info("start: %s", datetime.now().isoformat())
-
-    app.state.adb_path, app.state.scrcpy_path = ensure_tools()
-    start_adb_server(app.state.adb_path)
-    app.state.recording = None
-    app.state.recording_last_error = None
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    adb_path = getattr(app.state, "adb_path", None)
-    if adb_path:
-        stop_adb_server(adb_path)
-
-
 @app.get("/", response_class=HTMLResponse)
 async def get_index():
     static_index = STATIC_DIR / "index.html"
-    if static_index.exists():
-        return FileResponse(static_index)
-    html_file = TEMPLATES_DIR / "index.html"
-    if html_file.exists():
-        return FileResponse(html_file)
-    return HTMLResponse("<h1>Missing templates/index.html</h1>")
+    html_file = static_index if static_index.exists() else TEMPLATES_DIR / "index.html"
+    if not html_file.exists():
+        return HTMLResponse("<h1>Missing templates/index.html</h1>")
+
+    html = html_file.read_text(encoding="utf-8")
+    # Токен уходит только в саму страницу: сторонний сайт её не прочитает.
+    injection = f"<script>window.__MKDSC_TOKEN__={json.dumps(get_api_token())};</script>"
+    if "<head>" in html:
+        html = html.replace("<head>", "<head>" + injection, 1)
+    else:
+        html = injection + html
+    return HTMLResponse(html)
+
+
+@app.get("/api/bootstrap/status")
+async def bootstrap_status():
+    ready = bool(getattr(app.state, "adb_path", None) and getattr(app.state, "scrcpy_path", None))
+    error = getattr(app.state, "bootstrap_error", None)
+    progress = get_bootstrap_status()
+    return {
+        "ready": ready,
+        "error": error,
+        "stage": "ready" if ready else ("error" if error else progress.get("stage", "starting")),
+        "tool": progress.get("tool", ""),
+        "downloaded_bytes": progress.get("downloaded_bytes", 0),
+        "total_bytes": progress.get("total_bytes", 0),
+    }
 
 
 @app.get("/api/config")
@@ -175,6 +300,7 @@ async def get_config():
         "languages": available_languages(LEXICON_WEB),
     }
 
+
 @app.get("/api/config/full")
 async def get_config_full():
     return _get_config()
@@ -185,16 +311,31 @@ async def api_check_updates():
     return await asyncio.to_thread(check_for_updates)
 
 
-@app.post("/api/update/apply")
-async def api_apply_update():
-    return await asyncio.to_thread(apply_update)
-
-
 @app.post("/api/config")
 async def update_config(data: dict):
+    """Частичный патч: присланные ключи сливаются с текущим конфигом."""
     if not isinstance(data, dict):
         raise HTTPException(status_code=400, detail="Config payload required")
-    config = apply_config_patch(data)
+    try:
+        config = apply_config_patch(data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"success": True, "config": config}
+
+
+@app.put("/api/config")
+async def replace_config_endpoint(data: dict):
+    """Полная замена: удалённые в редакторе ключи действительно исчезают.
+
+    POST со слиянием не умел удалять — пользователь стирал ключ, видел
+    «Config saved», а ключ возвращался.
+    """
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=400, detail="Config payload required")
+    try:
+        config = replace_config(data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"success": True, "config": config}
 
 
@@ -214,14 +355,25 @@ async def get_i18n(lang: str = "en"):
 
 @app.get("/api/devices")
 async def get_devices():
-    saved = list_devices()
-    connected = get_connected_devices(app.state.adb_path)
+    saved = await run_in_threadpool(list_devices)
+    adb_path = getattr(app.state, "adb_path", None)
+    connected = []
+    if adb_path:
+        connected = await run_in_threadpool(get_connected_devices, adb_path)
 
     return {
         "saved": saved,
         "connected": connected,
         "timestamp": datetime.now().isoformat(),
     }
+
+
+@app.post("/api/adb/restart")
+async def restart_adb():
+    """Явный перезапуск adb-сервера (кнопка в диагностике)."""
+    adb_path = _require_adb()
+    await run_in_threadpool(restart_adb_server, adb_path)
+    return {"success": True}
 
 
 @app.post("/api/connect")
@@ -231,7 +383,10 @@ async def connect_device(data: dict):
     if not address:
         raise HTTPException(status_code=400, detail="Address required")
 
-    result = run_cmd([str(app.state.adb_path), "connect", address], show_output=False)
+    adb_path = _require_adb()
+    result = await run_in_threadpool(
+        run_cmd, [str(adb_path), "connect", address], None, False, 15
+    )
 
     success = result.returncode == 0 and "connected" in result.stdout.lower()
 
@@ -252,7 +407,10 @@ async def connect_device(data: dict):
 async def disconnect_device(data: dict):
     address = data.get("address")
 
-    result = run_cmd([str(app.state.adb_path), "disconnect", address], show_output=False)
+    adb_path = _require_adb()
+    result = await run_in_threadpool(
+        run_cmd, [str(adb_path), "disconnect", address], None, False, 15
+    )
 
     await manager.broadcast({
         "type": "device_status_changed",
@@ -273,15 +431,36 @@ async def save_device_endpoint(data: dict):
     if not all([name, ip]):
         raise HTTPException(status_code=400, detail="Name and IP required")
 
-    save_device(name, ip, port, connection_type)
+    await run_in_threadpool(save_device, name, ip, port, connection_type)
 
     return {"success": True, "message": f"Device '{name}' saved"}
 
 
 @app.delete("/api/devices/{ip}/{port}")
 async def delete_device(ip: str, port: str):
-    remove_device(ip, port)
+    await run_in_threadpool(remove_device, ip, port)
     return {"success": True}
+
+
+def _run_pair(adb_path, pair_address, pair_code, timeout=30):
+    proc = subprocess.Popen(
+        [str(adb_path), "pair", pair_address],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    try:
+        output, _ = proc.communicate(input=pair_code + "\n", timeout=timeout)
+    except subprocess.TimeoutExpired:
+        # Без таймаута adb pair на недоступном адресе вешал весь бэкенд.
+        proc.kill()
+        try:
+            output, _ = proc.communicate(timeout=5)
+        except Exception:
+            output = ""
+        output = (output or "") + f"\n[adb pair timed out after {timeout} seconds]"
+    return output
 
 
 @app.post("/api/pair")
@@ -292,14 +471,8 @@ async def pair_device(data: dict):
     if not all([pair_address, pair_code]):
         raise HTTPException(status_code=400, detail="Pair address and code required")
 
-    proc = subprocess.Popen(
-        [str(app.state.adb_path), "pair", pair_address],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-    )
-    output, _ = proc.communicate(input=pair_code + "\n")
+    adb_path = _require_adb()
+    output = await run_in_threadpool(_run_pair, adb_path, pair_address, pair_code, 30)
     success = "Successfully paired" in output
 
     return {
@@ -311,13 +484,20 @@ async def pair_device(data: dict):
 @app.post("/api/tcpip")
 async def enable_tcpip(data: dict):
     port = data.get("port", "5555")
+    serial = data.get("serial")
 
-    result = run_cmd([str(app.state.adb_path), "tcpip", port], show_output=False)
+    adb_path = _require_adb()
+    cmd = [str(adb_path)]
+    if serial:
+        cmd.extend(["-s", str(serial)])
+    cmd.extend(["tcpip", str(port)])
+
+    result = await run_in_threadpool(run_cmd, cmd, None, False, 15)
     success = result.returncode == 0
 
     ip_address = None
     if success:
-        ip_address = get_device_wifi_ip(app.state.adb_path)
+        ip_address = await run_in_threadpool(get_device_wifi_ip, adb_path, serial)
 
     return {
         "success": success,
@@ -368,35 +548,45 @@ async def delete_preset(name: str):
     return {"success": True, "presets": presets}
 
 
-def _apply_device_settings(adb_path, stay_awake, show_touches):
+def _apply_device_settings(adb_path, stay_awake, show_touches, serial=None):
+    """Возвращает (что восстановить, список незаданных настроек).
+
+    Серийник обязателен: при двух подключённых устройствах adb отвечает
+    'more than one device', и настройки молча не применялись.
+    """
     restore = {}
+    failed = []
 
     if stay_awake:
-        previous = get_setting(adb_path, "global", "stay_on_while_plugged_in")
-        restore["global:stay_on_while_plugged_in"] = previous
-        put_setting(adb_path, "global", "stay_on_while_plugged_in", 3)
+        previous = get_setting(adb_path, "global", "stay_on_while_plugged_in", serial)
+        if put_setting(adb_path, "global", "stay_on_while_plugged_in", 3, serial):
+            restore["global:stay_on_while_plugged_in"] = previous
+        else:
+            failed.append("stay_awake")
 
     if show_touches:
-        previous = get_setting(adb_path, "system", "show_touches")
-        restore["system:show_touches"] = previous
-        put_setting(adb_path, "system", "show_touches", 1)
+        previous = get_setting(adb_path, "system", "show_touches", serial)
+        if put_setting(adb_path, "system", "show_touches", 1, serial):
+            restore["system:show_touches"] = previous
+        else:
+            failed.append("show_touches")
 
-    return restore
+    return restore, failed
 
 
-def _restore_device_settings(adb_path, restore):
+def _restore_device_settings(adb_path, restore, serial=None):
     for key, value in restore.items():
         namespace, setting = key.split(":", 1)
         if value is None:
-            delete_setting(adb_path, namespace, setting)
+            delete_setting(adb_path, namespace, setting, serial)
         else:
-            put_setting(adb_path, namespace, setting, value)
+            put_setting(adb_path, namespace, setting, value, serial)
 
 
-def _restore_after(proc, adb_path, restore, logger):
+def _restore_after(proc, adb_path, restore, logger, serial=None):
     proc.wait()
     if restore:
-        _restore_device_settings(adb_path, restore)
+        _restore_device_settings(adb_path, restore, serial)
     logger.info("scrcpy exited with code %s", proc.returncode)
 
 
@@ -461,7 +651,9 @@ def _recording_status_payload(session=None):
 
 @app.post("/api/scrcpy/launch")
 async def launch_scrcpy_api(data: dict):
-    cmd = [str(app.state.scrcpy_path)]
+    scrcpy_path = _require_scrcpy()
+    adb_path = _require_adb()
+    cmd = [str(scrcpy_path)]
 
     if data.get("bitrate"):
         cmd.extend(["--video-bit-rate", data["bitrate"]])
@@ -491,7 +683,9 @@ async def launch_scrcpy_api(data: dict):
     stay_awake = data.get("stay_awake", False)
     show_touches = data.get("show_touches", False)
 
-    restore = _apply_device_settings(app.state.adb_path, stay_awake, show_touches)
+    restore, failed_settings = await run_in_threadpool(
+        _apply_device_settings, adb_path, stay_awake, show_touches, serial
+    )
 
     logger = app.state.logger
 
@@ -499,24 +693,23 @@ async def launch_scrcpy_api(data: dict):
         proc = subprocess.Popen(cmd)
     except Exception as exc:
         if restore:
-            _restore_device_settings(app.state.adb_path, restore)
+            await run_in_threadpool(_restore_device_settings, adb_path, restore, serial)
         return {"success": False, "output": str(exc)}
 
     threading.Thread(
         target=_restore_after,
-        args=(proc, app.state.adb_path, restore, logger),
+        args=(proc, adb_path, restore, logger, serial),
         daemon=True,
     ).start()
 
     logger.info("scrcpy settings: %s", data)
-    logger.info("device info: %s", get_device_info(app.state.adb_path))
-    logger.info("local ip: %s", get_device_wifi_ip(app.state.adb_path))
 
     return {
         "success": True,
         "pid": proc.pid,
         "command": " ".join(cmd),
         "warning_key": warning_key,
+        "failed_settings": failed_settings,
     }
 
 
@@ -525,7 +718,7 @@ async def recording_status():
     return _recording_status_payload()
 
 
-def _recording_watch(proc, adb_path, restore, logger):
+def _recording_watch(proc, adb_path, restore, logger, serial=None):
     output_lines = []
     if proc.stdout:
         for line in proc.stdout:
@@ -537,7 +730,7 @@ def _recording_watch(proc, adb_path, restore, logger):
                     output_lines.pop(0)
     proc.wait()
     if restore:
-        _restore_device_settings(adb_path, restore)
+        _restore_device_settings(adb_path, restore, serial)
     logger.info("recording exited with code %s", proc.returncode)
     session = getattr(app.state, "recording", None)
     if session and session.get("process") == proc:
@@ -557,6 +750,9 @@ def _recording_watch(proc, adb_path, restore, logger):
 async def start_recording(data: dict):
     if _get_recording_session():
         raise HTTPException(status_code=409, detail="Recording already active")
+
+    scrcpy_path = _require_scrcpy()
+    adb_path = _require_adb()
 
     app.state.recording_last_error = None
     config = _get_config()
@@ -588,7 +784,7 @@ async def start_recording(data: dict):
     keyboard = data.get("keyboard") or config.get("scrcpy", {}).get("keyboard", "uhid")
     keyboard, warning_key = _normalize_keyboard_mode(keyboard or "uhid")
 
-    cmd = [str(app.state.scrcpy_path)]
+    cmd = [str(scrcpy_path)]
     cmd.extend(["--record", str(output_path)])
     if bitrate:
         cmd.extend(["--video-bit-rate", str(bitrate)])
@@ -636,7 +832,9 @@ async def start_recording(data: dict):
         show_touches = bool(data.get("show_touches"))
     else:
         show_touches = bool(recording_cfg.get("show_touches", False))
-    restore = _apply_device_settings(app.state.adb_path, stay_awake, show_touches)
+    restore, failed_settings = await run_in_threadpool(
+        _apply_device_settings, adb_path, stay_awake, show_touches, serial
+    )
 
     logger = app.state.logger
 
@@ -653,7 +851,7 @@ async def start_recording(data: dict):
         )
     except Exception as exc:
         if restore:
-            _restore_device_settings(app.state.adb_path, restore)
+            await run_in_threadpool(_restore_device_settings, adb_path, restore, serial)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     await asyncio.sleep(0.4)
@@ -661,11 +859,11 @@ async def start_recording(data: dict):
         output = ""
         if proc.stdout:
             try:
-                output, _ = proc.communicate(timeout=1)
+                output, _ = await run_in_threadpool(proc.communicate, None, 1)
             except Exception:
                 output = ""
         if restore:
-            _restore_device_settings(app.state.adb_path, restore)
+            await run_in_threadpool(_restore_device_settings, adb_path, restore, serial)
         logger.info("recording failed to start: exit code %s", proc.returncode)
         if output:
             logger.info("recording output: %s", output.strip())
@@ -697,7 +895,7 @@ async def start_recording(data: dict):
 
     threading.Thread(
         target=_recording_watch,
-        args=(proc, app.state.adb_path, restore, logger),
+        args=(proc, adb_path, restore, logger, serial),
         daemon=True,
     ).start()
 
@@ -712,7 +910,41 @@ async def start_recording(data: dict):
         "filename": filename,
         "settings": settings,
         "warning_key": warning_key,
+        "failed_settings": failed_settings,
     }
+
+
+def _stop_recording_process(proc, timeout=RECORDING_STOP_TIMEOUT):
+    """Даём scrcpy дописать контейнер.
+
+    TerminateProcess на Windows убивает процесс мгновенно — MP4 остаётся без
+    moov-атома и не открывается ничем. Поэтому долгий graceful-таймаут и
+    честный флаг, если всё-таки пришлось убивать.
+    """
+    try:
+        if platform.system().lower().startswith("win"):
+            proc.send_signal(signal.CTRL_BREAK_EVENT)
+        else:
+            proc.send_signal(signal.SIGINT)
+    except Exception:
+        pass
+
+    try:
+        proc.wait(timeout=timeout)
+        return True
+    except Exception:
+        pass
+
+    try:
+        proc.terminate()
+        proc.wait(timeout=5)
+    except Exception:
+        try:
+            proc.kill()
+            proc.wait(timeout=5)
+        except Exception:
+            pass
+    return False
 
 
 @app.post("/api/recording/stop")
@@ -726,24 +958,16 @@ async def stop_recording():
         app.state.recording = None
         return {"success": False, "message": "Recording process missing"}
 
-    try:
-        session["stopping"] = True
-        if platform.system().lower().startswith("win"):
-            proc.send_signal(signal.CTRL_BREAK_EVENT)
-        else:
-            proc.send_signal(signal.SIGINT)
-        proc.wait(timeout=8)
-    except Exception:
-        try:
-            proc.terminate()
-            proc.wait(timeout=3)
-        except Exception:
-            try:
-                proc.kill()
-            except Exception:
-                pass
+    session["stopping"] = True
+    output_path = session.get("output_path")
+    graceful = await run_in_threadpool(_stop_recording_process, proc, RECORDING_STOP_TIMEOUT)
 
-    return {"success": True}
+    return {
+        "success": True,
+        "graceful": graceful,
+        "output_path": output_path,
+        "warning_key": None if graceful else "notification_recording_forced_stop",
+    }
 
 
 @app.get("/api/logs/download")
@@ -751,7 +975,7 @@ async def download_logs():
     zip_name = f"logs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
     zip_path = get_logs_dir() / zip_name
 
-    _create_logs_zip(zip_path)
+    await run_in_threadpool(_create_logs_zip, zip_path)
 
     def _cleanup(path: Path):
         path.unlink(missing_ok=True)
@@ -782,18 +1006,30 @@ async def export_logs(data: dict):
     zip_name = f"logs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
     zip_path = target_dir / zip_name
 
-    _create_logs_zip(zip_path)
+    await run_in_threadpool(_create_logs_zip, zip_path)
 
     return {"success": True, "path": str(zip_path), "filename": zip_name}
 
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    # HTTP-middleware для WebSocket не выполняется — проверяем здесь.
+    if not is_allowed_origin(websocket.headers.get("origin", "")):
+        await websocket.close(code=1008)
+        return
+    token = extract_token(websocket.headers, websocket.query_params)
+    if not token_matches(token):
+        await websocket.close(code=1008)
+        return
+
     await manager.connect(websocket)
 
     try:
         while True:
-            devices = get_connected_devices(app.state.adb_path)
+            adb_path = getattr(app.state, "adb_path", None)
+            devices = []
+            if adb_path:
+                devices = await run_in_threadpool(get_connected_devices, adb_path)
             await websocket.send_json({
                 "type": "devices_update",
                 "devices": devices,
@@ -803,26 +1039,33 @@ async def websocket_endpoint(websocket: WebSocket):
             await asyncio.sleep(3)
 
     except WebSocketDisconnect:
+        pass
+    except Exception:
+        # Любая другая ошибка тоже должна освободить соединение, иначе
+        # мёртвые сокеты копились в active_connections навсегда.
+        logger = getattr(app.state, "logger", None)
+        if logger:
+            logger.info("websocket closed with error", exc_info=True)
+    finally:
         manager.disconnect(websocket)
 
 
 def run_server(host=None, port=None, auto_open=None):
     config = _get_config()
-    host = host or config.get("web", {}).get("host", "0.0.0.0")
+    host = host or config.get("web", {}).get("host", "127.0.0.1")
     port = port or config.get("web", {}).get("port", 6969)
     if auto_open is None:
         auto_open = config.get("web", {}).get("auto_open", True)
+
+    app.state.bind_host = host
+    # Токен создаётся до старта, чтобы попасть в окружение дочерних процессов.
+    get_api_token()
 
     if auto_open:
         url = f"http://localhost:{port}"
         threading.Thread(target=_open_browser_when_ready, args=(url,), daemon=True).start()
 
-    try:
-        uvicorn.run(app, host=host, port=port)
-    finally:
-        adb_path = getattr(app.state, "adb_path", None)
-        if adb_path:
-            stop_adb_server(adb_path)
+    uvicorn.run(app, host=host, port=port)
 
 
 def _open_browser(url):

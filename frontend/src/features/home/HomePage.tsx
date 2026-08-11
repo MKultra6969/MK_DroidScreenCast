@@ -43,7 +43,7 @@ type HomePageProps = {
   savedDevices: SavedDevice[];
   devicesLoading: boolean;
   savedLoading: boolean;
-  saveNameRef: RefObject<HTMLInputElement | null>;
+  saveNameRef: RefObject<HTMLInputElement>;
   saveDeviceFromForm: () => void | Promise<void>;
   fillSaveDeviceForm: (serial: string) => void;
   connectSaved: (address: string) => void | Promise<void>;
@@ -79,6 +79,7 @@ type HomePageProps = {
   downloadLogs: () => void | Promise<void>;
   exportLogs: () => void | Promise<void>;
   checkUpdates: () => void | Promise<void>;
+  updateProgress: string;
   configDraft: string;
   setConfigDraft: Dispatch<SetStateAction<string>>;
   configLoading: boolean;
@@ -137,6 +138,7 @@ export function HomePage({
   downloadLogs,
   exportLogs,
   checkUpdates,
+  updateProgress,
   configDraft,
   setConfigDraft,
   configLoading,
@@ -1287,6 +1289,19 @@ export function HomePage({
                         <Download className="h-4 w-4" />
                         {t('logs_export_button')}
                       </button>
+                      {/* The prop was wired up but never rendered, so the
+                          logs.zip download was unreachable from the UI. */}
+                      <button
+                        className={cn(
+                          'inline-flex items-center gap-2 rounded-full border border-transparent bg-[var(--md-sys-color-secondary-container)] px-4 py-2 text-sm font-semibold',
+                          'text-[var(--button-secondary-text)] shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]',
+                          'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-outline)]'
+                        )}
+                        onClick={() => void downloadLogs()}
+                      >
+                        <Download className="h-4 w-4" />
+                        {t('download_logs')}
+                      </button>
                       <button
                         className={cn(
                           'inline-flex items-center gap-2 rounded-full border border-transparent bg-[var(--md-sys-color-secondary-container)] px-4 py-2 text-sm font-semibold',
@@ -1294,10 +1309,16 @@ export function HomePage({
                           'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-outline)]'
                         )}
                         onClick={() => void checkUpdates()}
+                        disabled={Boolean(updateProgress)}
                       >
-                        <RefreshCw className="h-4 w-4" />
+                        <RefreshCw className={cn('h-4 w-4', updateProgress && 'animate-spin')} />
                         {t('update_check_button')}
                       </button>
+                      {updateProgress && (
+                        <span className="self-center text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                          {updateProgress}
+                        </span>
+                      )}
                     </div>
                   </div>
                 )}

@@ -2,5 +2,10 @@
   "identifier": "main-default",
   "description": "Default permissions for the main window.",
   "windows": ["main"],
-  "permissions": ["core:default", "dialog:allow-open"]
+  "permissions": [
+    "core:default",
+    "dialog:allow-open",
+    "updater:default",
+    "process:default"
+  ]
 }

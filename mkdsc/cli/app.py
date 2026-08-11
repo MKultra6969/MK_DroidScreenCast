@@ -28,7 +28,7 @@ from mkdsc.tools import (
     start_adb_server,
     stop_adb_server,
 )
-from mkdsc.updater import apply_update, check_for_updates
+from mkdsc.updater import check_for_updates, open_release_page
 
 console = Console()
 
@@ -51,12 +51,10 @@ def _check_updates(t, logger, manual=False):
             border_style="yellow",
         ))
         if Confirm.ask(t("update_prompt"), default=False):
-            result = apply_update(release, logger=logger)
-            if result.get("success"):
-                console.print(f"[green]{t('update_success')}[/green]")
-                console.print(f"[dim]{t('update_restart')}[/dim]")
-                return True
-            console.print(f"[red]{t('update_failed')}[/red]")
+            result = open_release_page(release)
+            logger.info("Opened release page: %s", result["release_url"])
+            console.print(f"[cyan]{result['release_url']}[/cyan]")
+            console.print(f"[dim]{t('update_download_hint')}[/dim]")
             return False
     elif manual:
         console.print(f"[green]{t('update_latest')}[/green]")
@@ -154,7 +152,12 @@ def _wireless_pairing(adb_path, t):
         stderr=subprocess.STDOUT,
         text=True,
     )
-    output, _ = proc.communicate(input=pair_code + "\n")
+    try:
+        output, _ = proc.communicate(input=pair_code + "\n", timeout=30)
+    except subprocess.TimeoutExpired:
+        # На недоступном адресе adb pair не возвращается никогда.
+        proc.kill()
+        output = ""
     if "Successfully paired" not in output:
         console.print(f"[red]{t('pair_failed')}[/red]")
         return None

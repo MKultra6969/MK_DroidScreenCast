@@ -4,6 +4,9 @@ version = "1.0.2"
 description = "MK DroidScreenCast"
 authors = ["MKultra69"]
 edition = "2024"
+# Edition 2024 требует Rust 1.85+; без этого cargo падает с невнятным
+# сообщением про неизвестный edition.
+rust-version = "1.85"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -13,6 +16,11 @@ tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri-plugin-dialog = "2"
+tauri-plugin-process = "2"
+uuid = { version = "1", features = ["v4"] }
+
+[target.'cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))'.dependencies]
+tauri-plugin-updater = "2"
 
 [features]
 default = ["custom-protocol"]

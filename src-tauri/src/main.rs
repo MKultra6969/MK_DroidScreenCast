@@ -2,12 +2,34 @@
 
 use std::io::Write;
 use std::process::{Child, Command, Stdio};
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use tauri::{Manager, RunEvent, WindowEvent};
 
 struct BackendState(Mutex<Option<Child>>);
+
+static API_TOKEN: OnceLock<String> = OnceLock::new();
+
+/// Общий секрет между лаунчером и бэкендом.
+///
+/// Бэкенд получает его через окружение и требует в каждом запросе, а фронтенд
+/// забирает командой `mkdsc_api_token` — то есть токен никогда не покидает
+/// приложение и посторонняя вкладка браузера его не узнает.
+fn api_token() -> &'static str {
+    API_TOKEN.get_or_init(|| {
+        std::env::var("MKDSC_API_TOKEN")
+            .ok()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| uuid::Uuid::new_v4().simple().to_string())
+    })
+}
+
+#[tauri::command]
+fn mkdsc_api_token() -> String {
+    api_token().to_string()
+}
 
 #[cfg(windows)]
 fn set_no_window(command: &mut Command) {
@@ -152,7 +174,8 @@ fn spawn_backend(app: &tauri::AppHandle) -> Result<Child, Box<dyn std::error::Er
                 .env("MKDSC_DATA_DIR", &data_dir)
                 .env("MKDSC_HOST", "127.0.0.1")
                 .env("MKDSC_PORT", "6969")
-                .env("MKDSC_AUTO_OPEN", "0");
+                .env("MKDSC_AUTO_OPEN", "0")
+                .env("MKDSC_API_TOKEN", api_token());
             configure_backend_stdio(&mut command, &data_dir);
             set_no_window(&mut command);
 
@@ -199,7 +222,8 @@ fn spawn_backend(app: &tauri::AppHandle) -> Result<Child, Box<dyn std::error::Er
             .env("MKDSC_DATA_DIR", &data_dir)
             .env("MKDSC_HOST", "127.0.0.1")
             .env("MKDSC_PORT", "6969")
-            .env("MKDSC_AUTO_OPEN", "0");
+            .env("MKDSC_AUTO_OPEN", "0")
+            .env("MKDSC_API_TOKEN", api_token());
         configure_backend_stdio(&mut command, &data_dir);
         set_no_window(&mut command);
 
@@ -237,8 +261,17 @@ fn stop_backend(state: &BackendState) {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_process::init())
+        .invoke_handler(tauri::generate_handler![mkdsc_api_token])
         .manage(BackendState(Mutex::new(None)))
         .setup(|app| -> Result<(), Box<dyn std::error::Error>> {
+            // Signed, in-place updates with a real relaunch. Replaces the old
+            // hand-rolled updater that copied a source zipball over the
+            // install directory.
+            #[cfg(desktop)]
+            app.handle()
+                .plugin(tauri_plugin_updater::Builder::new().build())?;
+
             let child = spawn_backend(&app.handle())?;
             let state = app.state::<BackendState>();
             if let Ok(mut guard) = state.0.lock() {

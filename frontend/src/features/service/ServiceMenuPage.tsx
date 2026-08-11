@@ -13,7 +13,26 @@ type ServiceMenuPageProps = {
   runServiceCommand: (command: string) => void | Promise<void>;
   runCustomCommand: () => void | Promise<void>;
   serviceOutput: string;
+  serviceCommands: string[];
 };
+
+// Fallback only: the real list comes from GET /api/service/commands so the
+// two sides cannot drift into 404s.
+const FALLBACK_COMMANDS = [
+  'battery',
+  'wifi',
+  'memory',
+  'disk',
+  'screen',
+  'processes',
+  'cpu',
+  'top',
+  'props',
+  'packages',
+  'uptime',
+  'network',
+  'thermal'
+];
 
 export function ServiceMenuPage({
   t,
@@ -25,8 +44,10 @@ export function ServiceMenuPage({
   setServiceCommand,
   runServiceCommand,
   runCustomCommand,
-  serviceOutput
+  serviceOutput,
+  serviceCommands
 }: ServiceMenuPageProps) {
+  const commands = serviceCommands.length ? serviceCommands : FALLBACK_COMMANDS;
   const sectionHighlightClass = (sectionId: string) =>
     activeSection === sectionId
       ? 'ring-2 ring-[var(--md-sys-color-primary)] ring-offset-2 ring-offset-[var(--md-sys-color-background)]'
@@ -70,24 +91,10 @@ export function ServiceMenuPage({
         {!isSectionCollapsed('service-menu') && (
           <div className="flex flex-col gap-4 px-6 pb-6">
             <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">
-              Quick ADB diagnostic commands
+              {t('service_quick_title')}
             </p>
             <div className="flex flex-wrap gap-2">
-              {[
-                'battery',
-                'wifi',
-                'memory',
-                'disk',
-                'screen',
-                'processes',
-                'cpu',
-                'top',
-                'props',
-                'packages',
-                'uptime',
-                'network',
-                'thermal'
-              ].map((cmd) => (
+              {commands.map((cmd) => (
                 <button
                   key={cmd}
                   className={cn(
@@ -105,7 +112,7 @@ export function ServiceMenuPage({
             </div>
             <div className="flex flex-col gap-2">
               <label className="text-xs font-semibold tracking-wide text-[var(--md-sys-color-on-surface-variant)]">
-                Custom command
+                {t('service_custom_label')}
               </label>
               <div className="flex gap-2">
                 <input
@@ -124,7 +131,7 @@ export function ServiceMenuPage({
                   onClick={() => void runCustomCommand()}
                   disabled={serviceLoading || !serviceCommand.trim()}
                 >
-                  Run
+                  {t('service_run')}
                 </button>
               </div>
             </div>

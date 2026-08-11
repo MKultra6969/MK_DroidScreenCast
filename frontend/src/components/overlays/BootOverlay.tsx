@@ -4,9 +4,10 @@ type BootOverlayProps = {
   ready: boolean;
   timedOut: boolean;
   onRetry: () => void;
+  progress?: string;
 };
 
-export function BootOverlay({ ready, timedOut, onRetry }: BootOverlayProps) {
+export function BootOverlay({ ready, timedOut, onRetry, progress }: BootOverlayProps) {
   if (ready) return null;
 
   return (
@@ -19,6 +20,11 @@ export function BootOverlay({ ready, timedOut, onRetry }: BootOverlayProps) {
             ? 'The background service is taking longer than expected. Make sure it is running.'
             : 'Connecting to the background service...'}
         </p>
+        {/* First launch downloads platform-tools and scrcpy; show that instead
+            of an unexplained spinner. */}
+        {!timedOut && progress && (
+          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{progress}</p>
+        )}
         {timedOut && (
           <button
             className={cn(

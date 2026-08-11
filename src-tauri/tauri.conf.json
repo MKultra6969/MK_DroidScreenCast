@@ -19,12 +19,21 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: http://127.0.0.1:6969; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:6969 ws://127.0.0.1:6969"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/MKultra6969/MK_DroidScreenCast/releases/latest/download/latest.json"
+      ],
+      "pubkey": ""
     }
   },
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/icon.ico",
       "icons/icon.png"
@@ -34,7 +43,8 @@
       "../mkdsc",
       "../templates",
       "../static",
-      "../tauri_backend.py"
+      "../tauri_backend.py",
+      "../requirements.txt"
     ]
   }
 }

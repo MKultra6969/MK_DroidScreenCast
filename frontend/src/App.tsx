@@ -10,8 +10,16 @@ import { AutomationPage } from './features/automation/AutomationPage';
 import { FilesPage } from './features/files/FilesPage';
 import { HomePage } from './features/home/HomePage';
 import { ServiceMenuPage } from './features/service/ServiceMenuPage';
-import { apiFetch, readJson, wsUrl } from './lib/api';
+import { apiFetch, ensureApiToken, isTauri, readJson, wsUrl } from './lib/api';
+import { confirmAction } from './lib/dialogs';
 import { getPageForSection } from './lib/navigation';
+import {
+  canSelfUpdate,
+  checkForUpdate,
+  installUpdate,
+  openReleasePage,
+  restartApp
+} from './lib/updater';
 import { FIRST_RUN_KEY } from './lib/storage';
 import { formatDuration } from './lib/time';
 import { initialFormState } from './state/form';
@@ -35,7 +43,7 @@ const normalizeDevices = (value: unknown): Device[] => {
 const normalizeSavedDevices = (value: unknown): SavedDevice[] => {
   if (!Array.isArray(value)) return [];
   return value
-    .map((item) => {
+    .map((item): SavedDevice | null => {
       if (!item || typeof item !== 'object') return null;
       const record = item as {
         ip?: unknown;
@@ -74,7 +82,9 @@ function App() {
   const [recordingStatus, setRecordingStatus] = useState<RecordingStatus | null>(null);
   const [recordingLoading, setRecordingLoading] = useState(false);
   const [recordingSaving, setRecordingSaving] = useState(false);
-  const [recordingTick, setRecordingTick] = useState(0);
+  // A ticking timestamp rather than a counter, so the elapsed-time memo has a
+  // dependency it genuinely reads.
+  const [recordingNow, setRecordingNow] = useState(() => Date.now());
   const [firstRunOpen, setFirstRunOpen] = useState(false);
   const [devicesLoading, setDevicesLoading] = useState(true);
   const [savedLoading, setSavedLoading] = useState(true);
@@ -124,9 +134,16 @@ function App() {
   const [filesTotal, setFilesTotal] = useState(0);
   const [filesTotalPages, setFilesTotalPages] = useState(1);
 
-  const saveNameRef = useRef<HTMLInputElement | null>(null);
+  const [bootProgress, setBootProgress] = useState('');
+  const [updateProgress, setUpdateProgress] = useState('');
+  const [serviceCommands, setServiceCommands] = useState<string[]>([]);
+
+  const saveNameRef = useRef<HTMLInputElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectRef = useRef<number | null>(null);
+  const wsCancelledRef = useRef(false);
+  const wsRetryRef = useRef(0);
+  const notificationIdRef = useRef(0);
   const lastRecordingErrorRef = useRef<string | null>(null);
 
   const t = useCallback((key: string) => i18n[key] || key, [i18n]);
@@ -143,7 +160,10 @@ function App() {
   );
 
   const notifyMessage = useCallback((type: Notification['type'], message: string) => {
-    const id = Date.now() + Math.floor(Math.random() * 1000);
+    // Date.now() + random summed to the same value often enough to produce
+    // duplicate React keys; a monotonic counter cannot collide.
+    notificationIdRef.current += 1;
+    const id = notificationIdRef.current;
     setNotifications((prev) => [...prev, { id, type, message }]);
     window.setTimeout(() => {
       setNotifications((prev) => prev.filter((item) => item.id !== id));
@@ -228,6 +248,9 @@ function App() {
     setDevicesLoading(true);
     setSavedLoading(true);
 
+    // Every /api call needs the token, so it has to be resolved first.
+    await ensureApiToken();
+
     const maxAttempts = 40;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       try {
@@ -273,6 +296,34 @@ function App() {
     setBootTimedOut(true);
   }, [loadConfig, loadI18n]);
 
+  const loadBootProgress = useCallback(async () => {
+    try {
+      const response = await apiFetch('/api/bootstrap/status', { timeoutMs: 4000 });
+      if (!response.ok) return true;
+      const data = await response.json();
+      if (data.ready) {
+        setBootProgress('');
+        return true;
+      }
+      if (data.error) {
+        setBootProgress(String(data.error));
+        return true;
+      }
+      const tool = data.tool || 'tools';
+      if (data.stage === 'downloading' && data.total_bytes > 0) {
+        const percent = Math.round((data.downloaded_bytes / data.total_bytes) * 100);
+        setBootProgress(formatMessage('boot_downloading', { tool, percent: String(percent) }));
+      } else if (data.stage === 'extracting') {
+        setBootProgress(formatMessage('boot_extracting', { tool }));
+      } else {
+        setBootProgress(t('boot_preparing'));
+      }
+      return false;
+    } catch {
+      return true;
+    }
+  }, [formatMessage, t]);
+
   const loadDevices = useCallback(async () => {
     try {
       const response = await apiFetch('/api/devices');
@@ -310,15 +361,27 @@ function App() {
     }
   }, [notifyMessage, t]);
 
+  const scheduleReconnect = useCallback((connect: () => void) => {
+    if (wsCancelledRef.current) return;
+    // Exponential backoff instead of a fixed 3s hammer.
+    const delay = Math.min(30000, 1000 * 2 ** wsRetryRef.current);
+    wsRetryRef.current = Math.min(wsRetryRef.current + 1, 5);
+    reconnectRef.current = window.setTimeout(connect, delay);
+  }, []);
+
   const connectWebSocket = useCallback(() => {
+    if (wsCancelledRef.current) return;
     try {
       const ws = new WebSocket(wsUrl('/ws'));
       wsRef.current = ws;
 
-      ws.onopen = () => setWsConnected(true);
+      ws.onopen = () => {
+        wsRetryRef.current = 0;
+        setWsConnected(true);
+      };
       ws.onclose = () => {
         setWsConnected(false);
-        reconnectRef.current = window.setTimeout(connectWebSocket, 3000);
+        scheduleReconnect(connectWebSocket);
       };
       ws.onerror = () => setWsConnected(false);
 
@@ -327,6 +390,7 @@ function App() {
           const data = JSON.parse(event.data);
           if (data.type === 'devices_update') {
             setActiveDevices(normalizeDevices(data.devices));
+            setDevicesLoading(false);
           }
         } catch (error) {
           console.error('ws message error', error);
@@ -335,9 +399,9 @@ function App() {
     } catch (error) {
       console.error('ws connect error', error);
       setWsConnected(false);
-      reconnectRef.current = window.setTimeout(connectWebSocket, 3000);
+      scheduleReconnect(connectWebSocket);
     }
-  }, []);
+  }, [scheduleReconnect]);
   useEffect(() => {
     initTheme();
     void initializeApp();
@@ -345,21 +409,39 @@ function App() {
 
   useEffect(() => {
     if (!appReady) return;
+    wsCancelledRef.current = false;
+    wsRetryRef.current = 0;
     connectWebSocket();
     setDevicesLoading(true);
     setSavedLoading(true);
     void loadDevices();
-    const intervalId = window.setInterval(loadDevices, 5000);
     return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
+      // Order matters: mark cancelled and detach onclose *before* close(),
+      // otherwise the handler fires afterwards and schedules a reconnect that
+      // nothing will ever clear (two live sockets under StrictMode).
+      wsCancelledRef.current = true;
       if (reconnectRef.current) {
         window.clearTimeout(reconnectRef.current);
+        reconnectRef.current = null;
       }
-      window.clearInterval(intervalId);
+      const socket = wsRef.current;
+      if (socket) {
+        socket.onclose = null;
+        socket.onerror = null;
+        socket.onmessage = null;
+        socket.close();
+        wsRef.current = null;
+      }
     };
   }, [appReady, connectWebSocket, loadDevices]);
+
+  // HTTP polling is only a fallback: while the socket is up it pushes the
+  // same list every 3s, and each poll costs another blocking adb call.
+  useEffect(() => {
+    if (!appReady || wsConnected) return;
+    const intervalId = window.setInterval(loadDevices, 5000);
+    return () => window.clearInterval(intervalId);
+  }, [appReady, wsConnected, loadDevices]);
 
   useEffect(() => {
     if (!appReady) return;
@@ -370,7 +452,8 @@ function App() {
 
   useEffect(() => {
     if (!recordingStatus?.active) return;
-    const intervalId = window.setInterval(() => setRecordingTick((prev) => prev + 1), 1000);
+    setRecordingNow(Date.now());
+    const intervalId = window.setInterval(() => setRecordingNow(Date.now()), 1000);
     return () => window.clearInterval(intervalId);
   }, [recordingStatus?.active]);
 
@@ -392,6 +475,9 @@ function App() {
   }, []);
 
   useEffect(() => {
+    // Only while the modal is actually open: a global handler meant that any
+    // Escape (closing a dropdown, clearing focus) permanently hid onboarding.
+    if (!firstRunOpen) return;
     const handler = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setFirstRunOpen(false);
@@ -400,7 +486,24 @@ function App() {
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, []);
+  }, [firstRunOpen]);
+
+  // Poll bootstrap progress while the boot overlay is up.
+  useEffect(() => {
+    if (appReady) return;
+    let cancelled = false;
+    let timer = 0;
+    const tick = async () => {
+      const done = await loadBootProgress();
+      if (cancelled || done) return;
+      timer = window.setTimeout(tick, 700);
+    };
+    void tick();
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [appReady, loadBootProgress]);
 
   const closeFirstRunModal = (markSeen = true) => {
     setFirstRunOpen(false);
@@ -562,7 +665,7 @@ function App() {
   };
 
   const deleteSaved = async (ip: string, port: string) => {
-    if (!window.confirm(`${t('device_delete')}?`)) return;
+    if (!(await confirmAction(`${t('device_delete')}?`))) return;
     try {
       await apiFetch(`/api/devices/${ip}/${port}`, { method: 'DELETE' });
       notify('success', 'notification_saved_deleted');
@@ -740,6 +843,16 @@ function App() {
         if (data.warning_key) {
           notify('error', data.warning_key);
         }
+        // "Keep screen awake" / "Show touches" used to fail silently when adb
+        // saw more than one device.
+        if (Array.isArray(data.failed_settings) && data.failed_settings.length) {
+          notifyMessage(
+            'error',
+            formatMessage('notification_settings_not_applied', {
+              settings: data.failed_settings.join(', ')
+            })
+          );
+        }
       } else {
         notify('error', 'notification_scrcpy_failed');
       }
@@ -786,6 +899,14 @@ function App() {
       const data = await response.json();
       if (response.ok && data.success) {
         notify('success', 'notification_recording_started');
+        if (Array.isArray(data.failed_settings) && data.failed_settings.length) {
+          notifyMessage(
+            'error',
+            formatMessage('notification_settings_not_applied', {
+              settings: data.failed_settings.join(', ')
+            })
+          );
+        }
         setRecordingStatus({
           active: true,
           pid: data.pid,
@@ -811,6 +932,10 @@ function App() {
       const data = await response.json();
       if (data.success) {
         notify('success', 'notification_recording_stopped');
+        if (data.warning_key) {
+          // scrcpy had to be killed: the container may be missing its index.
+          notify('error', data.warning_key);
+        }
       } else {
         notifyMessage('error', data.message || t('notification_recording_stop_failed'));
       }
@@ -997,6 +1122,12 @@ function App() {
     if (!targetDir) {
       const selected = await selectLogsExportDir();
       if (!selected) {
+        // In the desktop build the blob download silently does nothing, so
+        // failing loudly beats pretending something happened.
+        if (isTauri()) {
+          notify('error', 'notification_logs_export_failed');
+          return;
+        }
         await downloadLogs();
         return;
       }
@@ -1056,8 +1187,10 @@ function App() {
 
     setConfigSaving(true);
     try {
+      // PUT, not POST: the editor sends the whole config, and a merge could
+      // never delete a key the user removed.
       const response = await apiFetch('/api/config', {
-        method: 'POST',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(parsed)
       });
@@ -1087,43 +1220,128 @@ function App() {
     void loadFullConfig(true);
   }, [appReady, loadFullConfig]);
 
-  const checkUpdates = async () => {
+  /** Desktop: download + install + relaunch. Everywhere else: release page. */
+  const runSelfUpdate = useCallback(
+    async (version: string, notes: string) => {
+      const promptText =
+        formatMessage('update_available_prompt', { latest: version }) +
+        (notes ? `\n\n${notes}` : '');
+      if (!(await confirmAction(promptText))) return;
+
+      setUpdateProgress(t('update_downloading_started'));
+      try {
+        await installUpdate((progress) => {
+          setUpdateProgress(
+            progress.percent === null
+              ? t('update_downloading_started')
+              : formatMessage('update_downloading', { percent: String(progress.percent) })
+          );
+        });
+      } catch (error) {
+        console.error('installUpdate error', error);
+        setUpdateProgress('');
+        notify('error', 'notification_update_failed');
+        return;
+      }
+
+      setUpdateProgress('');
+      if (await confirmAction(t('update_restart_prompt'))) {
+        await restartApp();
+        return;
+      }
+      notify('success', 'notification_update_applied');
+    },
+    [formatMessage, notify, t]
+  );
+
+  const offerReleasePage = useCallback(
+    async (version: string, notes: string, releaseUrl: string) => {
+      // Distinct wording: this path opens GitHub, it does not install anything.
+      const promptText =
+        formatMessage('update_open_release_prompt', { latest: version }) +
+        (notes ? `\n\n${notes}` : '');
+      if (await confirmAction(promptText)) {
+        await openReleasePage(releaseUrl);
+      }
+    },
+    [formatMessage]
+  );
+
+  const checkUpdates = useCallback(async () => {
+    // The backend check works everywhere and gives us the release URL for the
+    // fallback path, so it runs first regardless of build type.
+    let backend: {
+      update_available?: boolean;
+      latest?: string;
+      release?: { body?: string };
+      release_url?: string;
+    };
     try {
       const response = await apiFetch('/api/update/check');
-      const data = await response.json();
-      if (data.update_available) {
-        const body = (data.release && data.release.body || '').trim();
-        const promptText =
-          `${formatMessage('update_available_prompt', { latest: data.latest || '' })}` +
-          (body ? `\n\n${body}` : '');
-        if (window.confirm(promptText)) {
-          const applyResponse = await apiFetch('/api/update/apply', { method: 'POST' });
-          const result = await applyResponse.json();
-          if (result.success) {
-            notifyMessage('success', result.message || t('notification_update_applied'));
-          } else {
-            notifyMessage('error', result.message || t('notification_update_failed'));
-          }
+      backend = await readJson(response);
+    } catch (error) {
+      console.error('checkUpdates error', error);
+      notify('error', 'notification_update_failed');
+      return;
+    }
+
+    const notes = (backend.release?.body || '').trim();
+    const releaseUrl = backend.release_url || '';
+
+    if (canSelfUpdate()) {
+      try {
+        const update = await checkForUpdate();
+        if (update) {
+          await runSelfUpdate(update.version, update.notes || notes);
+          return;
         }
-      } else {
-        notify('success', 'notification_update_latest');
+        if (!backend.update_available) {
+          notify('success', 'notification_update_latest');
+          return;
+        }
+        // The signed feed does not know about it yet — send them to GitHub.
+        await offerReleasePage(backend.latest || '', notes, releaseUrl);
+        return;
+      } catch (error) {
+        // No signing key configured yet, feed unreachable, portable build...
+        console.warn('self-update unavailable, falling back to release page', error);
+      }
+    }
+
+    if (backend.update_available) {
+      await offerReleasePage(backend.latest || '', notes, releaseUrl);
+    } else {
+      notify('success', 'notification_update_latest');
+    }
+  }, [notify, offerReleasePage, runSelfUpdate]);
+
+  const serviceSerial = () => form.scrcpyDevice || (activeDevices.length === 1 ? activeDevices[0].serial : undefined);
+
+  // Service Menu: список команд берём с бэкенда, а не дублируем во фронте.
+  const loadServiceCommands = useCallback(async () => {
+    try {
+      const response = await apiFetch('/api/service/commands');
+      if (!response.ok) return;
+      const data = await readJson<{ commands?: string[] }>(response);
+      if (Array.isArray(data.commands)) {
+        setServiceCommands(data.commands);
       }
     } catch (error) {
-      notify('error', 'notification_update_failed');
+      console.error('loadServiceCommands error', error);
     }
-  };
+  }, []);
 
   // Service Menu: выполнить предопределённую команду
   const runServiceCommand = async (command: string) => {
     setServiceLoading(true);
     setServiceOutput('');
     try {
-      const serial = form.scrcpyDevice || undefined;
-      const url = `/api/service/${command}${serial ? `?serial=${serial}` : ''}`;
-      const response = await apiFetch(url);
-      const data = await readJson<{ output?: string; error?: string }>(response);
+      const serial = serviceSerial();
+      const url = `/api/service/${command}${serial ? `?serial=${encodeURIComponent(serial)}` : ''}`;
+      const response = await apiFetch(url, { method: 'POST' });
+      const data = await readJson<{ output?: string; error?: string; detail?: string }>(response);
       if (!response.ok) {
-        setServiceOutput(data.error || `Request failed: ${response.status}`);
+        setServiceOutput(fileErrorMessage(data, `Request failed: ${response.status}`));
         return;
       }
       setServiceOutput(data.output || data.error || 'No output');
@@ -1135,7 +1353,7 @@ function App() {
   };
 
   // Service Menu: выполнить кастомную команду
-  const runCustomCommand = async () => {
+  const runCustomCommand = async (confirmed = false) => {
     if (!serviceCommand.trim()) return;
     setServiceLoading(true);
     setServiceOutput('');
@@ -1143,11 +1361,25 @@ function App() {
       const response = await apiFetch('/api/service/custom', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: serviceCommand, serial: form.scrcpyDevice || null })
+        body: JSON.stringify({
+          command: serviceCommand,
+          serial: serviceSerial() || null,
+          confirm: confirmed
+        })
       });
-      const data = await readJson<{ output?: string; error?: string }>(response);
+      const data = await readJson<{ output?: string; error?: string; detail?: string }>(response);
+      if (response.status === 403 && !confirmed) {
+        // Бэкенд просит подтверждения: команда выходит за пределы диагностики.
+        const detail = typeof data.detail === 'string' ? data.detail : '';
+        setServiceLoading(false);
+        const accepted = await confirmAction(`${t('service_confirm_dangerous')}\n\n${detail}`);
+        if (accepted) {
+          await runCustomCommand(true);
+        }
+        return;
+      }
       if (!response.ok) {
-        setServiceOutput(data.error || `Request failed: ${response.status}`);
+        setServiceOutput(fileErrorMessage(data, `Request failed: ${response.status}`));
         return;
       }
       setServiceOutput(data.output || data.error || 'No output');
@@ -1217,17 +1449,17 @@ function App() {
       const response = await apiFetch(url, { method: 'POST' });
       const data = await readJson<{ success?: boolean; error?: string }>(response);
       if (!response.ok) {
-        notify('error', 'notification_scrcpy_failed');
+        notify('error', 'notification_screenshot_failed');
         return false;
       }
       if (data.success) {
-        notify('success', 'notification_scrcpy_started');
+        notify('success', 'notification_screenshot_taken');
         await loadScreenshots(1, screenshotsPageSize);
         return true;
       }
       return false;
     } catch {
-      notify('error', 'notification_scrcpy_failed');
+      notify('error', 'notification_screenshot_failed');
       return false;
     } finally {
       setTakingScreenshot(false);
@@ -1257,6 +1489,25 @@ function App() {
 
   const downloadScreenshot = async (id: string, filename: string) => {
     try {
+      if (isTauri()) {
+        // blob + <a download> does nothing inside WebView2, so the backend
+        // writes the file to the downloads folder itself.
+        const response = await apiFetch(`/api/screenshots/${id}/save`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+        const data = await readJson<{ success?: boolean; path?: string; detail?: string }>(response);
+        if (!response.ok || !data.success) {
+          notifyMessage('error', fileErrorMessage(data, t('notification_screenshot_download_failed')));
+          return;
+        }
+        notifyMessage(
+          'success',
+          formatMessage('notification_screenshot_saved_to', { path: data.path || '' })
+        );
+        return;
+      }
       const response = await apiFetch(`/api/screenshots/${id}`);
       if (!response.ok) {
         throw new Error(`download failed: ${response.status}`);
@@ -1367,14 +1618,14 @@ function App() {
     try {
       const serial = getFileSerial();
       if (!serial && activeDevices.length > 1) {
-        const message = 'Select a device to browse files.';
+        const message = t('notification_files_select_device');
         setFilesError(message);
         notifyMessage('error', message);
         setFiles([]);
         return;
       }
       if (!serial && activeDevices.length === 0) {
-        const message = 'No device connected.';
+        const message = t('notification_files_no_device');
         setFilesError(message);
         notifyMessage('error', message);
         setFiles([]);
@@ -1393,7 +1644,7 @@ function App() {
         error?: string;
       }>(response);
       if (!response.ok) {
-        const message = fileErrorMessage(data, `File list failed for ${path}`);
+        const message = fileErrorMessage(data, formatMessage('notification_files_list_failed', { path }));
         setFilesError(message);
         notifyMessage('error', message);
         setFiles([]);
@@ -1416,7 +1667,7 @@ function App() {
       setFilesPageSize(pageSize);
       setFilesTotalPages(totalPages);
     } catch {
-      const message = `File list failed for ${path}`;
+      const message = formatMessage('notification_files_list_failed', { path });
       setFilesError(message);
       notifyMessage('error', message);
       setFiles([]);
@@ -1449,12 +1700,10 @@ function App() {
     void loadFiles(currentPath, 1, nextSize);
   };
 
-  const isTauri = typeof window !== 'undefined' && Boolean((window as { __TAURI__?: unknown }).__TAURI__);
-
   const downloadFile = async (entry: FileEntry) => {
     if (entry.is_dir) return;
     try {
-      if (isTauri) {
+      if (isTauri()) {
         const response = await apiFetch(withFileSerial('/api/files/pull'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1462,11 +1711,14 @@ function App() {
         });
         const data = await readJson<{ success?: boolean; path?: string; error?: string; detail?: string }>(response);
         if (!response.ok || !data.success) {
-          const message = fileErrorMessage(data, `Download failed for ${entry.name}`);
+          const message = fileErrorMessage(
+            data,
+            formatMessage('notification_file_download_failed', { name: entry.name })
+          );
           notifyMessage('error', message);
           return;
         }
-        notifyMessage('success', `Saved to ${data.path || 'downloads folder'}`);
+        notifyMessage('success', formatMessage('notification_file_saved_to', { path: data.path || '' }));
         return;
       }
       const url = withFileSerial(`/api/files/download?path=${encodeURIComponent(entry.path)}`);
@@ -1484,10 +1736,10 @@ function App() {
       link.click();
       link.remove();
       window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 1000);
-      notifyMessage('success', `Downloaded ${entry.name}`);
+      notifyMessage('success', formatMessage('notification_file_downloaded', { name: entry.name }));
     } catch (error) {
       console.error('downloadFile error', error);
-      notifyMessage('error', `Download failed for ${entry.name}`);
+      notifyMessage('error', formatMessage('notification_file_download_failed', { name: entry.name }));
     }
   };
 
@@ -1498,15 +1750,18 @@ function App() {
       const response = await apiFetch(url, { method: 'DELETE' });
       const data = await readJson<{ success?: boolean; error?: string }>(response);
       if (!response.ok || !data.success) {
-        const message = fileErrorMessage(data, `Delete failed for ${entry.name}`);
+        const message = fileErrorMessage(
+          data,
+          formatMessage('notification_file_delete_failed', { name: entry.name })
+        );
         notifyMessage('error', message);
         return;
       }
-      notifyMessage('success', `Deleted ${entry.name}`);
+      notifyMessage('success', formatMessage('notification_file_deleted', { name: entry.name }));
       await loadFiles(currentPath, filesPage, filesPageSize);
     } catch (error) {
       console.error('deleteFile error', error);
-      notifyMessage('error', `Delete failed for ${entry.name}`);
+      notifyMessage('error', formatMessage('notification_file_delete_failed', { name: entry.name }));
     } finally {
       setFilesBusy(false);
     }
@@ -1523,15 +1778,18 @@ function App() {
       });
       const data = await readJson<{ success?: boolean; error?: string }>(response);
       if (!response.ok || !data.success) {
-        const message = fileErrorMessage(data, `Create folder failed for ${path}`);
+        const message = fileErrorMessage(
+          data,
+          formatMessage('notification_folder_create_failed', { path })
+        );
         notifyMessage('error', message);
         return;
       }
-      notifyMessage('success', `Folder created: ${path}`);
+      notifyMessage('success', formatMessage('notification_folder_created', { path }));
       await loadFiles(currentPath, filesPage, filesPageSize);
     } catch (error) {
       console.error('createDirectory error', error);
-      notifyMessage('error', `Create folder failed for ${path}`);
+      notifyMessage('error', formatMessage('notification_folder_create_failed', { path }));
     } finally {
       setFilesBusy(false);
     }
@@ -1548,15 +1806,15 @@ function App() {
       });
       const data = await readJson<{ success?: boolean; error?: string }>(response);
       if (!response.ok || !data.success) {
-        const message = fileErrorMessage(data, `Move failed for ${source}`);
+        const message = fileErrorMessage(data, formatMessage('notification_file_move_failed', { source }));
         notifyMessage('error', message);
         return;
       }
-      notifyMessage('success', `Moved to ${destination}`);
+      notifyMessage('success', formatMessage('notification_file_moved', { destination }));
       await loadFiles(currentPath, filesPage, filesPageSize);
     } catch (error) {
       console.error('moveEntry error', error);
-      notifyMessage('error', `Move failed for ${source}`);
+      notifyMessage('error', formatMessage('notification_file_move_failed', { source }));
     } finally {
       setFilesBusy(false);
     }
@@ -1572,7 +1830,7 @@ function App() {
       error?: string;
     }>(response);
     if (!response.ok) {
-      throw new Error(fileErrorMessage(data, `Read failed for ${path}`));
+      throw new Error(fileErrorMessage(data, formatMessage('notification_file_read_failed', { path })));
     }
     return {
       content: data.content || '',
@@ -1592,16 +1850,16 @@ function App() {
       });
       const data = await readJson<{ success?: boolean; error?: string }>(response);
       if (!response.ok || !data.success) {
-        const message = fileErrorMessage(data, `Save failed for ${path}`);
+        const message = fileErrorMessage(data, formatMessage('notification_file_write_failed', { path }));
         notifyMessage('error', message);
         return false;
       }
-      notifyMessage('success', `Saved ${path}`);
+      notifyMessage('success', formatMessage('notification_file_written', { path }));
       await loadFiles(currentPath, filesPage, filesPageSize);
       return true;
     } catch (error) {
       console.error('writeFile error', error);
-      notifyMessage('error', `Save failed for ${path}`);
+      notifyMessage('error', formatMessage('notification_file_write_failed', { path }));
       return false;
     } finally {
       setFilesBusy(false);
@@ -1626,17 +1884,23 @@ function App() {
         if (response.ok && data.success) {
           successCount += 1;
         } else {
-          notifyMessage('error', `Upload failed for ${file.name}`);
+          notifyMessage('error', formatMessage('notification_file_upload_failed', { name: file.name }));
         }
       }
       if (successCount) {
-        notifyMessage('success', `Uploaded ${successCount} of ${total} files`);
+        notifyMessage(
+          'success',
+          formatMessage('notification_files_uploaded', {
+            count: String(successCount),
+            total: String(total)
+          })
+        );
       }
       const nextPage = destination === currentPath ? filesPage : 1;
       await loadFiles(destination, nextPage, filesPageSize);
     } catch (error) {
       console.error('uploadFiles error', error);
-      notifyMessage('error', 'Upload failed');
+      notify('error', 'notification_upload_failed');
     } finally {
       setFilesBusy(false);
     }
@@ -1680,16 +1944,32 @@ function App() {
     if (!recordingStatus?.active || !recordingStatus.started_at) return null;
     const start = new Date(recordingStatus.started_at).getTime();
     if (Number.isNaN(start)) return null;
-    return formatDuration(Date.now() - start);
-  }, [recordingStatus?.active, recordingStatus?.started_at, recordingTick]);
+    return formatDuration(recordingNow - start);
+  }, [recordingStatus?.active, recordingStatus?.started_at, recordingNow]);
 
   const activePage = useMemo(() => getPageForSection(activeSection), [activeSection]);
 
+  // currentPath is deliberately not a dependency: loadFiles sets it on success,
+  // so listing a folder used to fire the same `adb shell ls` twice.
+  // Navigation, pagination and refresh call loadFiles directly.
   useEffect(() => {
     if (!appReady || activePage !== 'files') return;
-    void loadFiles(currentPath, filesPage, filesPageSize);
+    void loadFiles(currentPath, 1, filesPageSize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appReady, activePage, form.scrcpyDevice]);
+
+  // The gallery is independent of the file tree — reloading it on every
+  // folder change was pure waste.
+  useEffect(() => {
+    if (!appReady || activePage !== 'files') return;
     void loadScreenshots(screenshotsPage, screenshotsPageSize);
-  }, [appReady, activePage, currentPath, form.scrcpyDevice]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appReady, activePage]);
+
+  useEffect(() => {
+    if (!appReady) return;
+    void loadServiceCommands();
+  }, [appReady, loadServiceCommands]);
 
   useEffect(() => {
     const getHashSection = () => window.location.hash.replace('#', '').trim();
@@ -1831,6 +2111,7 @@ function App() {
                 downloadLogs={downloadLogs}
                 exportLogs={exportLogs}
                 checkUpdates={checkUpdates}
+                updateProgress={updateProgress}
                 configDraft={configDraft}
                 setConfigDraft={setConfigDraft}
                 configLoading={configLoading}
@@ -1849,8 +2130,9 @@ function App() {
                 serviceCommand={serviceCommand}
                 setServiceCommand={(value) => setServiceCommand(value)}
                 runServiceCommand={runServiceCommand}
-                runCustomCommand={runCustomCommand}
+                runCustomCommand={() => void runCustomCommand()}
                 serviceOutput={serviceOutput}
+                serviceCommands={serviceCommands}
               />
             )}
             {activePage === 'automation' && (
@@ -1862,6 +2144,7 @@ function App() {
             {activePage === 'files' && (
               <FilesPage
                 t={t}
+                formatMessage={formatMessage}
                 activeSection={activeSection}
                 isSectionCollapsed={isSectionCollapsed}
                 toggleSection={toggleSection}
@@ -1909,7 +2192,12 @@ function App() {
 
       <Notifications notifications={notifications} />
       <FirstRunModal open={firstRunOpen} onClose={closeFirstRunModal} t={t} />
-      <BootOverlay ready={appReady} timedOut={bootTimedOut} onRetry={() => void initializeApp()} />
+      <BootOverlay
+        ready={appReady}
+        timedOut={bootTimedOut}
+        progress={bootProgress}
+        onRetry={() => void initializeApp()}
+      />
     </div>
   );
 }

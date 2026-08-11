@@ -1,5 +1,5 @@
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 
 import requests
 
@@ -37,5 +37,5 @@ def fetch_latest_release(api_url=API_LATEST_RELEASE):
             }
             for asset in payload.get("assets", []) or []
         ],
-        "fetched_at": datetime.utcnow().isoformat(),
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
     }

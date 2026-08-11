@@ -11,7 +11,7 @@ from mkdsc.cli.app import run_cli
 from mkdsc.config import load_config
 from mkdsc.i18n import get_translator
 from mkdsc.i18n.lexicon_cli import LEXICON_CLI
-from mkdsc.updater import apply_update, check_for_updates
+from mkdsc.updater import check_for_updates, open_release_page
 from mkdsc.web.server import run_server
 
 console = Console()
@@ -34,12 +34,9 @@ def _check_updates(t, manual=False):
             border_style="yellow",
         ))
         if Confirm.ask(t("update_prompt"), default=False):
-            result = apply_update(release)
-            if result.get("success"):
-                console.print(f"[green]{t('update_success')}[/green]")
-                console.print(f"[dim]{t('update_restart')}[/dim]")
-                return True
-            console.print(f"[red]{t('update_failed')}[/red]")
+            result = open_release_page(release)
+            console.print(f"[cyan]{result['release_url']}[/cyan]")
+            console.print(f"[dim]{t('update_download_hint')}[/dim]")
             return False
     elif manual:
         console.print(f"[green]{t('update_latest')}[/green]")

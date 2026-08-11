@@ -1,6 +1,9 @@
 import json
+import os
+import tempfile
+import threading
 from copy import deepcopy
-from datetime import datetime
+from datetime import datetime, timezone
 
 from .constants import CONFIG_SCHEMA_VERSION
 from .paths import CONFIG_PATH, LEGACY_DEVICES_PATH
@@ -15,7 +18,7 @@ DEFAULT_CONFIG = {
     "config_version": CONFIG_SCHEMA_VERSION,
     "language": "en",
     "web": {
-        "host": "0.0.0.0",
+        "host": "127.0.0.1",
         "port": 6969,
         "auto_open": True,
     },
@@ -56,6 +59,21 @@ DEFAULT_CONFIG = {
     "last_update_check": None,
 }
 
+# Sections that must always be objects; anything else is reset to defaults.
+_DICT_SECTIONS = (
+    "web",
+    "logs",
+    "downloads",
+    "connection_optimizer",
+    "recording",
+    "cli",
+    "scrcpy",
+)
+
+# Serialising load/save keeps concurrent endpoints (config, presets, devices)
+# from clobbering each other's read-modify-write cycles.
+_CONFIG_LOCK = threading.RLock()
+
 
 def _deep_merge(defaults, overrides):
     result = {}
@@ -77,20 +95,83 @@ def _deep_merge(defaults, overrides):
 def _load_json(path):
     try:
         return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError):
         return None
 
 
-def _migrate_config(config):
+def _backup_corrupt_config():
+    """Keep a copy of an unreadable config instead of silently overwriting it."""
+    try:
+        if CONFIG_PATH.exists():
+            backup = CONFIG_PATH.with_suffix(CONFIG_PATH.suffix + ".bak")
+            backup.write_bytes(CONFIG_PATH.read_bytes())
+    except OSError:
+        pass
+
+
+def _sanitize_config(config):
+    """Force every known section to its expected type.
+
+    A hand-edited (or UI-saved) config with ``"scrcpy": null`` used to make
+    every later ``.get()`` raise, which bricked the whole backend.
+    """
     changed = False
+
+    if not isinstance(config, dict):
+        return deepcopy(DEFAULT_CONFIG), True
+
+    for section in _DICT_SECTIONS:
+        if not isinstance(config.get(section), dict):
+            config[section] = deepcopy(DEFAULT_CONFIG[section])
+            changed = True
+
+    if not isinstance(config.get("devices"), list):
+        config["devices"] = []
+        changed = True
+
+    if not isinstance(config.get("language"), str):
+        config["language"] = DEFAULT_CONFIG["language"]
+        changed = True
+
+    presets = config["scrcpy"].get("presets")
+    if not isinstance(presets, list):
+        config["scrcpy"]["presets"] = deepcopy(DEFAULT_PRESETS)
+        changed = True
+    else:
+        valid = [item for item in presets if isinstance(item, dict) and item.get("name")]
+        if len(valid) != len(presets):
+            config["scrcpy"]["presets"] = valid
+            changed = True
+
+    web = config["web"]
+    try:
+        port = int(web.get("port", DEFAULT_CONFIG["web"]["port"]))
+    except (TypeError, ValueError):
+        port = DEFAULT_CONFIG["web"]["port"]
+    if not (1 <= port <= 65535):
+        port = DEFAULT_CONFIG["web"]["port"]
+    if web.get("port") != port:
+        web["port"] = port
+        changed = True
+
+    if not isinstance(web.get("host"), str) or not web.get("host").strip():
+        web["host"] = DEFAULT_CONFIG["web"]["host"]
+        changed = True
+
+    return config, changed
+
+
+def _migrate_config(config):
+    config, changed = _sanitize_config(config)
 
     if config.get("config_version") != CONFIG_SCHEMA_VERSION:
         config["config_version"] = CONFIG_SCHEMA_VERSION
         changed = True
 
-    presets = config.get("scrcpy", {}).get("presets")
-    if not presets:
-        config.setdefault("scrcpy", {})["presets"] = deepcopy(DEFAULT_PRESETS)
+    if not config["scrcpy"].get("presets"):
+        config["scrcpy"]["presets"] = deepcopy(DEFAULT_PRESETS)
         changed = True
 
     if not config.get("devices") and LEGACY_DEVICES_PATH.exists():
@@ -103,68 +184,98 @@ def _migrate_config(config):
         config["last_update_check"] = None
         changed = True
 
-    logs_config = config.get("logs")
-    if not isinstance(logs_config, dict):
-        config["logs"] = {"export_dir": ""}
-        changed = True
-    elif "export_dir" not in logs_config:
-        logs_config["export_dir"] = ""
+    if "export_dir" not in config["logs"]:
+        config["logs"]["export_dir"] = ""
         changed = True
 
-    downloads_config = config.get("downloads")
-    if not isinstance(downloads_config, dict):
-        config["downloads"] = {"base_dir": ""}
-        changed = True
-    elif "base_dir" not in downloads_config:
-        downloads_config["base_dir"] = ""
+    if "base_dir" not in config["downloads"]:
+        config["downloads"]["base_dir"] = ""
         changed = True
 
-    connection_cfg = config.get("connection_optimizer")
-    if not isinstance(connection_cfg, dict):
-        config["connection_optimizer"] = {"auto_switch": False}
-        changed = True
-    elif "auto_switch" not in connection_cfg:
-        connection_cfg["auto_switch"] = False
+    if "auto_switch" not in config["connection_optimizer"]:
+        config["connection_optimizer"]["auto_switch"] = False
         changed = True
 
-    recording_config = config.get("recording")
-    if not isinstance(recording_config, dict):
-        config["recording"] = deepcopy(DEFAULT_CONFIG["recording"])
-        changed = True
-    else:
-        for key, value in DEFAULT_CONFIG["recording"].items():
-            if key not in recording_config:
-                recording_config[key] = value
-                changed = True
+    for key, value in DEFAULT_CONFIG["recording"].items():
+        if key not in config["recording"]:
+            config["recording"][key] = value
+            changed = True
 
     return config, changed
 
 
 def load_config():
-    if CONFIG_PATH.exists():
-        loaded = _load_json(CONFIG_PATH) or {}
-        merged = _deep_merge(DEFAULT_CONFIG, loaded)
-        merged, changed = _migrate_config(merged)
-        if changed or merged != loaded:
-            save_config(merged)
-        return merged
+    with _CONFIG_LOCK:
+        if CONFIG_PATH.exists():
+            loaded = _load_json(CONFIG_PATH)
+            if loaded is None:
+                _backup_corrupt_config()
+                loaded = {}
+            elif not isinstance(loaded, dict):
+                _backup_corrupt_config()
+                loaded = {}
+            merged = _deep_merge(DEFAULT_CONFIG, loaded)
+            merged, changed = _migrate_config(merged)
+            if changed or merged != loaded:
+                save_config(merged)
+            return merged
 
-    config = deepcopy(DEFAULT_CONFIG)
-    config["last_update_check"] = datetime.utcnow().isoformat()
-    save_config(config)
-    return config
+        config = deepcopy(DEFAULT_CONFIG)
+        config["last_update_check"] = datetime.now(timezone.utc).isoformat()
+        save_config(config)
+        return config
 
 
 def save_config(config):
-    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    CONFIG_PATH.write_text(
-        json.dumps(config, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    """Write atomically: a crash mid-write must not truncate config.json."""
+    with _CONFIG_LOCK:
+        CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        payload = json.dumps(config, indent=2, ensure_ascii=False)
+
+        handle = tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=str(CONFIG_PATH.parent),
+            prefix=CONFIG_PATH.name + ".",
+            suffix=".tmp",
+            delete=False,
+        )
+        tmp_path = handle.name
+        try:
+            with handle:
+                handle.write(payload)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(tmp_path, CONFIG_PATH)
+        except BaseException:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
 
 
 def update_config(patch):
-    config = load_config()
-    updated = _deep_merge(config, patch)
-    save_config(updated)
-    return updated
+    """Partial update: deep-merge ``patch`` into the stored config."""
+    if not isinstance(patch, dict):
+        raise ValueError("Config patch must be an object")
+    with _CONFIG_LOCK:
+        config = load_config()
+        updated = _deep_merge(config, patch)
+        updated, _ = _migrate_config(updated)
+        save_config(updated)
+        return updated
+
+
+def replace_config(new_config):
+    """Full replacement: keys absent from ``new_config`` are actually dropped.
+
+    Missing sections fall back to defaults so the app can still boot.
+    """
+    if not isinstance(new_config, dict):
+        raise ValueError("Config payload must be an object")
+    with _CONFIG_LOCK:
+        merged = _deep_merge(DEFAULT_CONFIG, deepcopy(new_config))
+        merged, _ = _migrate_config(merged)
+        save_config(merged)
+        return merged

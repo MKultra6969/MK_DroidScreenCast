@@ -107,8 +107,10 @@ def _run_adb(adb_path: str, args: List[str], timeout: int = 10) -> subprocess.Co
     return subprocess.run([adb_path, *args], capture_output=True, text=True, timeout=timeout)
 
 
+# Все четыре обработчика — обычные def: внутри синхронный subprocess.run, и
+# FastAPI сам выполнит их в пуле потоков, не замораживая event loop.
 @router.post("/auto-detect")
-async def auto_detect_best_connection():
+def auto_detect_best_connection():
     """
     Определяет лучшее подключение на основе метрик латентности.
     
@@ -172,9 +174,9 @@ async def auto_detect_best_connection():
 
 
 @router.post("/auto-switch")
-async def auto_switch_best_connection(payload: Optional[dict] = None):
+def auto_switch_best_connection(payload: Optional[dict] = None):
     """
-    ???????? ?????? ??????????? ? ???????????? ?? Wi-Fi, ???? ?? ?????? ?????????.
+    Выбирает лучшее подключение и переключается на Wi-Fi, если он быстрее.
     """
     payload = payload or {}
     target_serial = (payload.get("serial") or "").strip() or None
@@ -251,7 +253,7 @@ async def auto_switch_best_connection(payload: Optional[dict] = None):
 
 
 @router.get("/metrics/{serial}")
-async def get_device_metrics(serial: str):
+def get_device_metrics(serial: str):
     """Получает метрики для конкретного устройства."""
     from mkdsc.tools import get_tool_path
     
@@ -262,7 +264,7 @@ async def get_device_metrics(serial: str):
 
 
 @router.get("/metrics")
-async def get_all_metrics():
+def get_all_metrics():
     """Получает метрики для всех подключенных устройств."""
     from mkdsc.tools import get_connected_devices, get_tool_path
     

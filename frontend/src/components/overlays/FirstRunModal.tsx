@@ -12,7 +12,8 @@ export function FirstRunModal({ open, onClose, t }: FirstRunModalProps) {
     <div
       className={cn(
         'modal-overlay fixed inset-0 z-[1200] flex items-center justify-center p-5 transition-opacity',
-        open ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
+        // invisible keeps the hidden dialog's controls out of the tab order
+        open ? 'pointer-events-auto opacity-100' : 'pointer-events-none invisible opacity-0'
       )}
       aria-hidden={!open}
       onClick={(event) => {

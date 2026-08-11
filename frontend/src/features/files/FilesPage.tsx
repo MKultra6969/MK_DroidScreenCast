@@ -17,13 +17,15 @@ import {
   Upload,
   X
 } from 'lucide-react';
-import { API_BASE } from '../../lib/api';
+import { apiUrlWithToken } from '../../lib/api';
+import { confirmAction } from '../../lib/dialogs';
 import { delayStyle } from '../../lib/style';
 import { cn } from '../../utils';
 import type { FileEntry, Screenshot } from '../../types/app';
 
 type FilesPageProps = {
   t: (key: string) => string;
+  formatMessage: (key: string, params?: Record<string, string>) => string;
   activeSection: string;
   isSectionCollapsed: (sectionId: string) => boolean;
   toggleSection: (sectionId: string) => void;
@@ -215,6 +217,7 @@ const PaginationBar = ({
 
 export function FilesPage({
   t,
+  formatMessage,
   activeSection,
   isSectionCollapsed,
   toggleSection,
@@ -373,10 +376,19 @@ export function FilesPage({
     }
   };
 
-  const confirmDelete = (entry: FileEntry) => {
-    const kind = entry.is_dir ? 'folder' : 'file';
-    if (!window.confirm(`Delete ${kind} "${entry.name}"?`)) return;
+  const confirmDelete = async (entry: FileEntry) => {
+    const kind = t(entry.is_dir ? 'files_kind_folder' : 'files_kind_file');
+    const accepted = await confirmAction(
+      formatMessage('files_delete_confirm', { kind, name: entry.name })
+    );
+    if (!accepted) return;
     void deleteFile(entry);
+  };
+
+  // Раньше клик по корзине в плитке галереи удалял скриншот без вопросов.
+  const confirmDeleteScreenshot = async (id: string) => {
+    if (!(await confirmAction(t('files_screenshot_delete_confirm')))) return;
+    void deleteScreenshot(id);
   };
 
   const openRename = (entry: FileEntry) => {
@@ -565,7 +577,7 @@ export function FilesPage({
                 disabled={takingScreenshot}
               >
                 <Monitor className="h-4 w-4" />
-                {takingScreenshot ? 'Taking...' : 'Take Screenshot'}
+                {takingScreenshot ? t('files_taking') : t('files_take_screenshot')}
               </button>
               <input
                 className="min-w-[200px] flex-1 rounded-full border border-[var(--md-sys-color-outline-variant)] bg-transparent px-4 py-2 text-sm"
@@ -584,7 +596,7 @@ export function FilesPage({
                 disabled={screenshotsLoading}
               >
                 <RefreshCw className={cn('h-4 w-4', screenshotsLoading && 'animate-spin')} />
-                Refresh
+                {t('files_refresh')}
               </button>
             </div>
             {screenshots.length > 0 ? (
@@ -601,7 +613,7 @@ export function FilesPage({
                         onClick={() => openScreenshot(ss)}
                       >
                         <img
-                          src={`${API_BASE}/api/screenshots/${ss.id}`}
+                          src={apiUrlWithToken(`/api/screenshots/${ss.id}`)}
                           alt={ss.caption || ss.filename}
                           className="h-full w-full object-cover"
                         />
@@ -628,7 +640,7 @@ export function FilesPage({
                               type="button"
                               onClick={(event) => {
                                 event.stopPropagation();
-                                void deleteScreenshot(ss.id);
+                                void confirmDeleteScreenshot(ss.id);
                               }}
                               title={deleteLabel}
                               aria-label={deleteLabel}
@@ -656,7 +668,7 @@ export function FilesPage({
               </div>
             ) : (
               <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">
-                No screenshots yet. Take one!
+                {t('files_no_screenshots')}
               </p>
             )}
           </div>
@@ -731,7 +743,7 @@ export function FilesPage({
                   onClick={handlePathSubmit}
                 >
                   <ArrowRight className="h-3.5 w-3.5" />
-                  Go
+                  {t('files_go')}
                 </button>
               </div>
               <button
@@ -739,10 +751,10 @@ export function FilesPage({
                 type="button"
                 onClick={() => navigateToDir(parentPath)}
                 disabled={currentPath === '/'}
-                title="Up"
+                title={t('files_up')}
               >
                 <ArrowUp className="h-3.5 w-3.5" />
-                Up
+                {t('files_up')}
               </button>
               <button
                 className={toolbarButtonClass}
@@ -751,7 +763,7 @@ export function FilesPage({
                 disabled={filesLoading}
               >
                 <RefreshCw className={cn('h-3.5 w-3.5', filesLoading && 'animate-spin')} />
-                Refresh
+                {t('files_refresh')}
               </button>
               <button
                 className={primaryButtonClass}
@@ -760,7 +772,7 @@ export function FilesPage({
                 disabled={filesBusy}
               >
                 <Upload className="h-3.5 w-3.5" />
-                Upload
+                {t('files_upload')}
               </button>
               <button
                 className={toolbarButtonClass}
@@ -769,7 +781,7 @@ export function FilesPage({
                 disabled={filesBusy}
               >
                 <FolderPlus className="h-3.5 w-3.5" />
-                New Folder
+                {t('files_new_folder')}
               </button>
               <span className="ml-auto text-xs text-[var(--md-sys-color-on-surface-variant)]">
                 {currentPath}
@@ -829,7 +841,7 @@ export function FilesPage({
                 >
                   {dragActive && (
                     <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center border-2 border-dashed border-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-primary-container)]/60 text-sm font-semibold text-[var(--md-sys-color-on-primary-container)]">
-                      Drop files to upload
+                      {t('files_drop_hint')}
                     </div>
                   )}
                   {currentPath !== '/' && (
@@ -906,7 +918,7 @@ export function FilesPage({
                           <button
                             className={actionButtonClass}
                             type="button"
-                            title="Rename"
+                            title={t('files_rename')}
                             onClick={() => openRename(file)}
                           >
                             <Pencil className="h-3.5 w-3.5" />
@@ -914,8 +926,8 @@ export function FilesPage({
                           <button
                             className={actionButtonClass}
                             type="button"
-                            title="Delete"
-                            onClick={() => confirmDelete(file)}
+                            title={t('screenshot_delete')}
+                            onClick={() => void confirmDelete(file)}
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
@@ -944,7 +956,7 @@ export function FilesPage({
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
               >
-                <p>Drop files here to upload or pick a folder.</p>
+                <p>{t('files_drop_hint')}</p>
                 <button
                   className={primaryButtonClass}
                   type="button"
@@ -952,7 +964,7 @@ export function FilesPage({
                   disabled={filesBusy}
                 >
                   <Upload className="h-3.5 w-3.5" />
-                  Upload files
+                  {t('files_upload_files')}
                 </button>
               </div>
             )}
@@ -963,7 +975,7 @@ export function FilesPage({
       <div
         className={cn(
           'modal-overlay fixed inset-0 z-[1200] flex items-center justify-center p-5 transition-opacity',
-          newFolderOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
+          newFolderOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none invisible opacity-0'
         )}
         aria-hidden={!newFolderOpen}
         onClick={(event) => {
@@ -981,24 +993,24 @@ export function FilesPage({
           <button
             className="absolute right-4 top-4 text-[var(--md-sys-color-on-surface-variant)]"
             onClick={() => setNewFolderOpen(false)}
-            aria-label="Close"
+            aria-label={t('files_close')}
           >
             <X className="h-5 w-5" />
           </button>
           <div className="flex items-center gap-3 text-[var(--md-sys-color-primary)]">
             <FolderPlus className="h-6 w-6 rounded-[14px] bg-[var(--md-sys-color-primary-container)] p-2 text-[var(--md-sys-color-on-primary-container)]" />
             <h2 id="newFolderTitle" className="font-display text-lg font-semibold">
-              New Folder
+              {t('files_new_folder')}
             </h2>
           </div>
           <label className="flex flex-col gap-2 text-sm">
-            <span className="text-[var(--md-sys-color-on-surface-variant)]">Folder name</span>
+            <span className="text-[var(--md-sys-color-on-surface-variant)]">{t('files_folder_name')}</span>
             <input
               className="w-full rounded-[var(--radius-md)] border border-[var(--md-sys-color-outline-variant)] bg-transparent px-3 py-2 text-sm"
               type="text"
               value={newFolderName}
               onChange={(event) => setNewFolderName(event.target.value)}
-              placeholder="New folder"
+              placeholder={t('files_folder_name')}
             />
           </label>
           <div className="flex flex-wrap justify-end gap-3">
@@ -1007,10 +1019,10 @@ export function FilesPage({
               type="button"
               onClick={() => setNewFolderOpen(false)}
             >
-              Cancel
+              {t('files_cancel')}
             </button>
             <button className={primaryButtonClass} type="button" onClick={() => void confirmNewFolder()}>
-              Create
+              {t('files_create')}
             </button>
           </div>
         </div>
@@ -1019,7 +1031,7 @@ export function FilesPage({
       <div
         className={cn(
           'modal-overlay fixed inset-0 z-[1200] flex items-center justify-center p-5 transition-opacity',
-          renameTarget ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
+          renameTarget ? 'pointer-events-auto opacity-100' : 'pointer-events-none invisible opacity-0'
         )}
         aria-hidden={!renameTarget}
         onClick={(event) => {
@@ -1037,18 +1049,18 @@ export function FilesPage({
           <button
             className="absolute right-4 top-4 text-[var(--md-sys-color-on-surface-variant)]"
             onClick={() => setRenameTarget(null)}
-            aria-label="Close"
+            aria-label={t('files_close')}
           >
             <X className="h-5 w-5" />
           </button>
           <div className="flex items-center gap-3 text-[var(--md-sys-color-primary)]">
             <Pencil className="h-6 w-6 rounded-[14px] bg-[var(--md-sys-color-primary-container)] p-2 text-[var(--md-sys-color-on-primary-container)]" />
             <h2 id="renameTitle" className="font-display text-lg font-semibold">
-              Rename
+              {t('files_rename')}
             </h2>
           </div>
           <label className="flex flex-col gap-2 text-sm">
-            <span className="text-[var(--md-sys-color-on-surface-variant)]">New name</span>
+            <span className="text-[var(--md-sys-color-on-surface-variant)]">{t('files_new_name')}</span>
             <input
               className="w-full rounded-[var(--radius-md)] border border-[var(--md-sys-color-outline-variant)] bg-transparent px-3 py-2 text-sm"
               type="text"
@@ -1062,10 +1074,10 @@ export function FilesPage({
               type="button"
               onClick={() => setRenameTarget(null)}
             >
-              Cancel
+              {t('files_cancel')}
             </button>
             <button className={primaryButtonClass} type="button" onClick={() => void confirmRename()}>
-              Rename
+              {t('files_rename')}
             </button>
           </div>
         </div>
@@ -1074,7 +1086,7 @@ export function FilesPage({
       <div
         className={cn(
           'modal-overlay fixed inset-0 z-[1200] flex items-center justify-center p-5 transition-opacity',
-          editorOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
+          editorOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none invisible opacity-0'
         )}
         aria-hidden={!editorOpen}
         onClick={(event) => {
@@ -1092,7 +1104,7 @@ export function FilesPage({
           <button
             className="absolute right-4 top-4 text-[var(--md-sys-color-on-surface-variant)]"
             onClick={() => setEditorOpen(false)}
-            aria-label="Close"
+            aria-label={t('files_close')}
           >
             <X className="h-5 w-5" />
           </button>
@@ -1105,13 +1117,13 @@ export function FilesPage({
           {editorLoading ? (
             <div className="flex items-center gap-2 text-sm text-[var(--md-sys-color-on-surface-variant)]">
               <RefreshCw className="h-4 w-4 animate-spin" />
-              Loading file contents...
+              {t('files_loading_contents')}
             </div>
           ) : editorError ? (
             <p className="text-sm text-red-500">{editorError}</p>
           ) : editorBinary ? (
             <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">
-              Binary file detected. Use download to edit locally.
+              {t('files_binary_notice')}
             </p>
           ) : (
             <>
@@ -1129,7 +1141,7 @@ export function FilesPage({
           )}
           <div className="flex flex-wrap justify-end gap-3">
             <button className={toolbarButtonClass} type="button" onClick={() => setEditorOpen(false)}>
-              Close
+              {t('files_close')}
             </button>
             <button
               className={primaryButtonClass}
@@ -1137,7 +1149,7 @@ export function FilesPage({
               onClick={() => void handleEditorSave()}
               disabled={editorLoading || editorBinary || filesBusy}
             >
-              Save
+              {t('files_save')}
             </button>
           </div>
         </div>
@@ -1146,7 +1158,7 @@ export function FilesPage({
       <div
         className={cn(
           'modal-overlay fixed inset-0 z-[1200] flex items-center justify-center p-5 transition-opacity',
-          selectedScreenshot ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
+          selectedScreenshot ? 'pointer-events-auto opacity-100' : 'pointer-events-none invisible opacity-0'
         )}
         aria-hidden={!selectedScreenshot}
         onClick={(event) => {
@@ -1178,7 +1190,7 @@ export function FilesPage({
             <>
               <div className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] p-2">
                 <img
-                  src={`${API_BASE}/api/screenshots/${selectedScreenshot.id}`}
+                  src={apiUrlWithToken(`/api/screenshots/${selectedScreenshot.id}`)}
                   alt={selectedScreenshot.caption || selectedScreenshot.filename}
                   className="max-h-[60vh] w-full object-contain"
                 />
