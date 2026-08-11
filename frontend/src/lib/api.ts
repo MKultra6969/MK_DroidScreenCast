@@ -71,8 +71,8 @@ type IpcRoute = {
  * Эндпоинты, уехавшие с HTTP на Tauri IPC.
  *
  * Команда называется по методу и пути (`GET /api/devices` → `api_devices`),
- * а ответ Rust собирает в ту же форму, что отдаёт FastAPI. Всего, чего в этой
- * таблице нет, роутер не касается — такие пути молча уходят в `fetch`, и
+ * а ответ Rust собирает в ту же форму, что отдаёт FastAPI. Всё, чего в этой
+ * таблице нет, роутер не трогает — такие пути молча уходят в `fetch`, и
  * непереехавшие эндпоинты продолжают работать.
  */
 const IPC_ROUTES: IpcRoute[] = [{ method: 'GET', pattern: '/api/devices', command: 'api_devices' }];
@@ -167,23 +167,30 @@ const invokeIpcRoute = async (
 const ipcFetch = (path: string, init: ApiFetchOptions): Promise<Response> | null => {
   if (!isTauri()) return null;
 
-  // Разбор через URL, а не регулярками: нужно отделить `pathname` от
-  // `searchParams`, и делать это вручную — верный способ ошибиться на
-  // экранировании. База фиктивная, `path` всегда относительный.
-  const url = new URL(path, 'http://mkdsc.invalid');
-  const method = (init.method || 'GET').toUpperCase();
+  try {
+    // Разбор через URL, а не регулярками: нужно отделить `pathname` от
+    // `searchParams`, и делать это вручную — верный способ ошибиться на
+    // экранировании. База фиктивная, `path` всегда относительный.
+    const url = new URL(path, 'http://mkdsc.invalid');
+    const method = (init.method || 'GET').toUpperCase();
 
-  const match = matchIpcRoute(method, url.pathname);
-  if (!match) return null;
+    const match = matchIpcRoute(method, url.pathname);
+    if (!match) return null;
 
-  const query: Record<string, string> = {};
-  // Повторяющиеся ключи схлопываются: списочных параметров в API сейчас нет,
-  // а когда появятся — здесь понадобится массив.
-  url.searchParams.forEach((value, key) => {
-    query[key] = value;
-  });
+    const query: Record<string, string> = {};
+    // Повторяющиеся ключи схлопываются: списочных параметров в API сейчас нет,
+    // а когда появятся — здесь понадобится массив.
+    url.searchParams.forEach((value, key) => {
+      query[key] = value;
+    });
 
-  return invokeIpcRoute(match, query, parseIpcBody(init.body));
+    return invokeIpcRoute(match, query, parseIpcBody(init.body));
+  } catch {
+    // Разбор пути кинуть может: `new URL` на битом пути, `decodeURIComponent`
+    // на одиночном '%'. Роутер обязан вести себя как `fetch` до него, поэтому
+    // не смогли разобрать — отдаём путь HTTP, а не роняем вызов.
+    return null;
+  }
 };
 
 export const apiFetch = (path: string, init: ApiFetchOptions = {}) => {
