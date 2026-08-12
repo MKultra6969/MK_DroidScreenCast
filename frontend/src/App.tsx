@@ -505,8 +505,8 @@ function App() {
     };
   }, [appReady, clearStreamTimer, connectWebSocket, loadDevices, markDeviceStreamAlive]);
 
-  // HTTP polling is only a fallback: while the device stream is up it pushes
-  // the same list every 3s, and each poll costs another blocking adb call.
+  // HTTP polling is only a fallback: while the device stream is up it already
+  // pushes every change, and each poll costs another blocking adb call.
   useEffect(() => {
     if (!appReady || wsConnected) return;
     const intervalId = window.setInterval(loadDevices, 5000);
