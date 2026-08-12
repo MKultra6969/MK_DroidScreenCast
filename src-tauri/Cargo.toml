@@ -24,7 +24,9 @@ uuid = { version = "1", features = ["v4"] }
 # Внешние процессы (adb) запускаются из async-команд, поэтому нужен
 # именно tokio::process: std::process заблокировал бы поток рантайма.
 # Сам tokio уже приходит транзитивно с Tauri, лишнего веса тут нет.
-tokio = { version = "1", features = ["process", "time"] }
+# `sync` — замок фоновой задачи, раздающей список устройств: он держится
+# через `await`, и `std::sync::Mutex` для этого не годится.
+tokio = { version = "1", features = ["process", "time", "sync"] }
 # Для timestamp в формате `datetime.now().isoformat()` — локальное время без
 # таймзоны. Тоже уже есть в дереве зависимостей Tauri.
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }

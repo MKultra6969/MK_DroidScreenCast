@@ -328,7 +328,10 @@ fn devices_mut(config: &mut Map<String, Value>) -> &mut Vec<Value> {
 
 /// Локальное время без таймзоны с микросекундами — формат
 /// `datetime.now().isoformat()`, который отдаёт тот же эндпоинт в Python.
-fn now_iso() -> String {
+///
+/// Виден и модулю `events`: у события `devices_update` тот же timestamp, что у
+/// WS-сообщения, которое оно заменяет.
+pub(crate) fn now_iso() -> String {
     chrono::Local::now()
         .naive_local()
         .format("%Y-%m-%dT%H:%M:%S%.6f")

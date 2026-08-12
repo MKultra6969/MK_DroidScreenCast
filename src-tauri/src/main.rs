@@ -4,6 +4,7 @@ mod api;
 mod config;
 mod devices;
 mod error;
+mod events;
 mod paths;
 mod tools;
 
@@ -266,6 +267,12 @@ fn main() {
             if let Ok(mut guard) = state.0.lock() {
                 *guard = Some(child);
             }
+
+            // Поток устройств поднимается один раз на всё приложение, а не на
+            // окно: перезагрузка страницы (F5) не должна плодить вторую задачу
+            // и удваивать опрос adb.
+            events::spawn(app.handle().clone());
+
             Ok(())
         })
         .build(tauri::generate_context!())
