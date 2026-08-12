@@ -16,7 +16,7 @@ use serde_json::{Map, Value, json};
 use tauri::AppHandle;
 
 use crate::error::ApiError;
-use crate::{config, devices, events, scrcpy, tools};
+use crate::{config, devices, events, recording, scrcpy, tools};
 
 /// Языки веб-панели — ключи `LEXICON_WEB` из `mkdsc/i18n/lexicon_web.py`.
 ///
@@ -417,6 +417,42 @@ pub async fn api_scrcpy_launch(app: AppHandle, body: Option<Value>) -> Result<Va
         "warning_key": plan.warning_key,
         "failed_settings": failed_settings,
     }))
+}
+
+/// Зеркалит `GET /api/recording/status`.
+///
+/// Фронтенд опрашивает его раз в две секунды, поэтому команда не ходит ни в
+/// adb, ни в конфиг: всё нужное лежит в состоянии процесса.
+#[tauri::command]
+pub async fn api_recording_status() -> Result<Value, ApiError> {
+    Ok(recording::status())
+}
+
+/// Зеркалит `POST /api/recording/start`.
+///
+/// 409, если запись уже идёт. Проверка стоит перед поиском инструментов —
+/// такой же порядок в Python, и он важнее, чем кажется: 503 «scrcpy ещё
+/// готовится» на идущей записи сбил бы с толку.
+#[tauri::command]
+pub async fn api_recording_start(app: AppHandle, body: Option<Value>) -> Result<Value, ApiError> {
+    if recording::is_active() {
+        return Err(ApiError::new(409, "Recording already active"));
+    }
+
+    let data = object_or_empty(body);
+    let scrcpy_bin = require_scrcpy(&app)?;
+    let adb = require_adb(&app)?;
+
+    recording::start(&app, &scrcpy_bin, &adb, &data).await
+}
+
+/// Зеркалит `POST /api/recording/stop`.
+///
+/// Ждёт, пока scrcpy допишет файл, — до 45 секунд. Долго намеренно: оборвать
+/// дописывание значит отдать пользователю запись, которую не открыть.
+#[tauri::command]
+pub async fn api_recording_stop() -> Result<Value, ApiError> {
+    Ok(recording::stop().await)
 }
 
 // ---------------------------------------------------------------------------

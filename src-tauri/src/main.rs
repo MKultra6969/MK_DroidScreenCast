@@ -6,7 +6,9 @@ mod devices;
 mod error;
 mod events;
 mod paths;
+mod recording;
 mod scrcpy;
+mod signal;
 mod tools;
 
 use std::io::Write;
@@ -258,7 +260,10 @@ fn main() {
             api::api_pair,
             api::api_tcpip,
             api::api_adb_restart,
-            api::api_scrcpy_launch
+            api::api_scrcpy_launch,
+            api::api_recording_status,
+            api::api_recording_start,
+            api::api_recording_stop
         ])
         .manage(BackendState(Mutex::new(None)))
         .setup(|app| -> Result<(), Box<dyn std::error::Error>> {

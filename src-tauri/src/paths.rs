@@ -34,6 +34,61 @@ pub fn config_path(app: &AppHandle) -> PathBuf {
     data_dir(app).join("config.json")
 }
 
+/// Каталог для записей по умолчанию — `get_recordings_dir` в `mkdsc/paths.py`.
+///
+/// Если пользователь задал `downloads.base_dir`, записи уезжают в его
+/// подкаталог `video`, иначе — в `DATA_DIR/recordings`. Расходиться с Python
+/// нельзя: пока живы обе панели, они должны показывать одни и те же файлы.
+pub fn recordings_dir(app: &AppHandle, config: &serde_json::Map<String, serde_json::Value>) -> PathBuf {
+    match downloads_base_dir(config) {
+        Some(base) if base != data_dir(app) => base.join("video"),
+        _ => data_dir(app).join("recordings"),
+    }
+}
+
+/// `downloads.base_dir` из конфига, если он задан непустой строкой.
+fn downloads_base_dir(config: &serde_json::Map<String, serde_json::Value>) -> Option<PathBuf> {
+    let base = config
+        .get("downloads")?
+        .as_object()?
+        .get("base_dir")?
+        .as_str()?
+        .trim();
+    (!base.is_empty()).then(|| expand_user(base))
+}
+
+/// Раскрывает ведущую тильду — аналог `Path.expanduser()`.
+///
+/// Пользователь вправе написать в конфиге `~/Videos`, и без раскрытия каталог
+/// с именем `~` создался бы прямо в рабочем каталоге приложения.
+pub fn expand_user(path: &str) -> PathBuf {
+    let Some(rest) = path.strip_prefix('~') else {
+        return PathBuf::from(path);
+    };
+    // Раскрывается только «~» и «~/...»: `~user` Python на Windows тоже не
+    // разбирает, а гадать за пользователя тут не из чего.
+    if !rest.is_empty() && !rest.starts_with(['/', '\\']) {
+        return PathBuf::from(path);
+    }
+
+    let Some(home) = home_dir() else {
+        return PathBuf::from(path);
+    };
+    let rest = rest.trim_start_matches(['/', '\\']);
+    if rest.is_empty() {
+        home
+    } else {
+        home.join(rest)
+    }
+}
+
+fn home_dir() -> Option<PathBuf> {
+    std::env::var_os("USERPROFILE")
+        .or_else(|| std::env::var_os("HOME"))
+        .map(PathBuf::from)
+        .filter(|home| !home.as_os_str().is_empty())
+}
+
 /// `BASE_DIR/devices.json` — формат до появления `config.json`.
 ///
 /// Читается только миграцией, и только пока список устройств пуст. Путь идёт
