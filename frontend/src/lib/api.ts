@@ -91,6 +91,13 @@ const IPC_ROUTES: IpcRoute[] = [
   { method: 'POST', pattern: '/api/pair', command: 'api_pair' },
   { method: 'POST', pattern: '/api/tcpip', command: 'api_tcpip' },
   { method: 'POST', pattern: '/api/adb/restart', command: 'api_adb_restart' },
+  { method: 'POST', pattern: '/api/scrcpy/launch', command: 'api_scrcpy_launch' },
+  { method: 'GET', pattern: '/api/recording/status', command: 'api_recording_status' },
+  { method: 'POST', pattern: '/api/recording/start', command: 'api_recording_start' },
+  // Остановка ждёт, пока scrcpy допишет файл, — до 45 секунд. Своего таймаута у
+  // `invoke` нет, и это как раз то, что нужно: оборванная остановка оставила бы
+  // запись без индекса.
+  { method: 'POST', pattern: '/api/recording/stop', command: 'api_recording_stop' },
 ];
 
 type IpcMatch = {
