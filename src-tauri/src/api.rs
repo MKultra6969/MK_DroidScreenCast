@@ -10,12 +10,13 @@
 //! `spawn_blocking` на каждый вызов только добавил бы шума.
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 use serde_json::{Map, Value, json};
 use tauri::AppHandle;
 
 use crate::error::ApiError;
-use crate::{config, devices, tools};
+use crate::{config, devices, events, tools};
 
 /// Языки веб-панели — ключи `LEXICON_WEB` из `mkdsc/i18n/lexicon_web.py`.
 ///
@@ -23,6 +24,12 @@ use crate::{config, devices, tools};
 /// нужен только список. Чтобы он не разъехался со словарём, есть тест
 /// `languages_match_python_lexicon`.
 const LANGUAGES: [&str; 2] = ["en", "ru"];
+
+/// По этой подстроке `POST /api/pair` отличает успех от неудачи.
+///
+/// Это контракт, а не догадка: `adb pair` возвращает ноль и на неверном коде,
+/// а сообщение печатает в вывод. Python проверяет ровно её.
+const PAIR_SUCCESS: &str = "Successfully paired";
 
 /// Зеркалит `GET /api/devices` (`mkdsc/web/server.py`).
 ///
@@ -237,9 +244,156 @@ pub async fn api_devices_delete(
     Ok(json!({"success": true}))
 }
 
+/// Зеркалит `POST /api/adb/restart` — кнопка перезапуска adb-сервера.
+///
+/// Коды возврата adb не проверяются, как и в Python: ответ всегда
+/// `{"success": true}`.
+#[tauri::command]
+pub async fn api_adb_restart(app: AppHandle) -> Result<Value, ApiError> {
+    let adb = require_adb(&app)?;
+    devices::restart_server(&adb).await?;
+    Ok(json!({"success": true}))
+}
+
+/// Зеркалит `POST /api/connect`.
+///
+/// Успех — нулевой код возврата и слово `connected` в выводе. Одного кода мало:
+/// `adb connect` на недоступный адрес тоже завершается нулём и пишет
+/// `failed to connect to ...`, отличить можно только по тексту.
+///
+/// Python здесь ещё рассылал по WebSocket `device_status_changed`. Фронтенд это
+/// сообщение не обрабатывает вообще, поэтому оно не переносится: вместо него
+/// список устройств опрашивается сразу же и уходит событием `devices_update` —
+/// UI обновляется, не дожидаясь следующего такта фоновой задачи.
+#[tauri::command]
+pub async fn api_connect(app: AppHandle, body: Option<Value>) -> Result<Value, ApiError> {
+    let data = object_or_empty(body);
+    let Some(address) = required_str(&data, "address") else {
+        return Err(ApiError::new(400, "Address required"));
+    };
+
+    let adb = require_adb(&app)?;
+    let output = devices::connect(&adb, &address).await?;
+    let success = output.success() && output.stdout.to_lowercase().contains("connected");
+
+    events::refresh(&app).await;
+
+    Ok(json!({
+        "success": success,
+        "output": output.combined(),
+        "address": address,
+    }))
+}
+
+/// Зеркалит `POST /api/disconnect`.
+///
+/// `success` здесь всегда `true`, а в `output` уезжает только stdout — так
+/// устроен ответ в Python, и фронтенд на него не смотрит.
+///
+/// Адрес обязателен, хотя в Python явной проверки нет: там пустой адрес доезжал
+/// до `subprocess` списком с `None` и падал пятисоткой. Просто выкинуть аргумент
+/// нельзя — `adb disconnect` без адреса отключает **все** сетевые устройства.
+#[tauri::command]
+pub async fn api_disconnect(app: AppHandle, body: Option<Value>) -> Result<Value, ApiError> {
+    let data = object_or_empty(body);
+    let Some(address) = required_str(&data, "address") else {
+        return Err(ApiError::new(400, "Address required"));
+    };
+
+    let adb = require_adb(&app)?;
+    let output = devices::disconnect(&adb, &address).await?;
+
+    events::refresh(&app).await;
+
+    Ok(json!({"success": true, "output": output.stdout}))
+}
+
+/// Зеркалит `POST /api/pair` — спаривание по коду (Android 11+).
+///
+/// Спаривание само по себе не подключает устройство, поэтому список не
+/// обновляется: подключение — отдельный шаг, за ним придёт `api_connect`.
+#[tauri::command]
+pub async fn api_pair(app: AppHandle, body: Option<Value>) -> Result<Value, ApiError> {
+    let data = object_or_empty(body);
+    let (Some(address), Some(code)) = (
+        required_str(&data, "pair_address"),
+        required_str(&data, "pair_code"),
+    ) else {
+        return Err(ApiError::new(400, "Pair address and code required"));
+    };
+
+    let adb = require_adb(&app)?;
+    let output = devices::pair(&adb, &address, &code).await?;
+
+    Ok(json!({
+        "success": output.contains(PAIR_SUCCESS),
+        "output": output,
+    }))
+}
+
+/// Зеркалит `POST /api/tcpip` — включает на устройстве приём по сети.
+///
+/// При успехе дополнительно спрашивает у устройства его Wi-Fi-адрес: UI
+/// подставляет `ip:port` в поле быстрого подключения.
+#[tauri::command]
+pub async fn api_tcpip(app: AppHandle, body: Option<Value>) -> Result<Value, ApiError> {
+    let data = object_or_empty(body);
+    let port = data.get("port").cloned().unwrap_or_else(|| json!("5555"));
+    // Пустой серийник — это «серийник не задан», как `if serial:` в Python:
+    // с `-s ""` adb не нашёл бы устройство вообще.
+    let serial = data
+        .get("serial")
+        .filter(|value| config::is_truthy(value))
+        .map(config::python_str);
+
+    let adb = require_adb(&app)?;
+    let output = devices::tcpip(&adb, serial.as_deref(), &config::python_str(&port)).await?;
+    let success = output.success();
+
+    let ip = match success {
+        true => devices::wifi_ip(&adb, serial.as_deref()).await?,
+        false => None,
+    };
+
+    // `adb tcpip` перезапускает adbd на устройстве, и по USB оно на секунду
+    // пропадает из списка — обновляем его сразу, а не через три секунды.
+    events::refresh(&app).await;
+
+    Ok(json!({
+        "success": success,
+        "ip": ip,
+        // Порт возвращается ровно тем, чем пришёл: фронтенд склеивает из него
+        // адрес быстрого подключения.
+        "port": port,
+        "output": output.combined(),
+    }))
+}
+
 // ---------------------------------------------------------------------------
 // Вспомогательное
 // ---------------------------------------------------------------------------
+
+/// Путь к adb или 503 — как `_require_adb()` в Python.
+///
+/// Пока Python докачивает platform-tools, adb на диске ещё нет. 503 с этим
+/// текстом фронтенд показывает как «инструменты готовятся», а не как поломку.
+fn require_adb(app: &AppHandle) -> Result<PathBuf, ApiError> {
+    tools::adb_path(app).ok_or_else(|| ApiError::new(503, "adb is still being prepared"))
+}
+
+/// Обязательное строковое поле тела запроса.
+///
+/// Пустая строка равносильна отсутствию — как `if not address` в Python.
+/// Значение не подрезается: оно уезжает обратно в ответе, и расхождение с
+/// Python здесь было бы заметно. Нестроковое значение считается отсутствующим —
+/// в Python оно доехало бы до `subprocess` и упало бы пятисоткой, а осмысленная
+/// 400 полезнее.
+fn required_str(data: &Map<String, Value>, key: &str) -> Option<String> {
+    data.get(key)
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+}
 
 /// Срез конфига для `GET /api/config` — форма из `mkdsc/web/server.py`.
 fn config_summary(config: &Map<String, Value>) -> Value {

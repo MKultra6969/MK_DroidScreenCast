@@ -251,7 +251,12 @@ fn main() {
             api::api_config_replace,
             api::api_presets,
             api::api_presets_save,
-            api::api_presets_delete
+            api::api_presets_delete,
+            api::api_connect,
+            api::api_disconnect,
+            api::api_pair,
+            api::api_tcpip,
+            api::api_adb_restart
         ])
         .manage(BackendState(Mutex::new(None)))
         .setup(|app| -> Result<(), Box<dyn std::error::Error>> {

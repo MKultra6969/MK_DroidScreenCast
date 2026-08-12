@@ -26,7 +26,9 @@ uuid = { version = "1", features = ["v4"] }
 # Сам tokio уже приходит транзитивно с Tauri, лишнего веса тут нет.
 # `sync` — замок фоновой задачи, раздающей список устройств: он держится
 # через `await`, и `std::sync::Mutex` для этого не годится.
-tokio = { version = "1", features = ["process", "time", "sync"] }
+# `io-util` и `rt` — ради `adb pair`: код спаривания пишется в stdin, а вывод
+# вычитывается отдельными задачами.
+tokio = { version = "1", features = ["process", "time", "sync", "io-util", "rt"] }
 # Для timestamp в формате `datetime.now().isoformat()` — локальное время без
 # таймзоны. Тоже уже есть в дереве зависимостей Tauri.
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
