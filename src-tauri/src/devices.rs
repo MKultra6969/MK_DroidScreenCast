@@ -261,6 +261,72 @@ pub fn parse_wifi_ip(stdout: &str) -> Option<String> {
         })
 }
 
+/// `adb shell settings get <namespace> <key>` — `get_setting` в `mkdsc/tools.py`.
+///
+/// `None` означает «значения не было»: либо команда не отработала, либо
+/// устройство ответило `null`. Восстанавливать такую настройку потом надо
+/// удалением ключа, а не записью пустого значения.
+pub async fn get_setting(
+    adb: &Path,
+    namespace: &str,
+    key: &str,
+    serial: Option<&str>,
+) -> Result<Option<String>, ApiError> {
+    let output = run_adb(
+        adb,
+        &with_serial(serial, &["shell", "settings", "get", namespace, key]),
+        SHELL_TIMEOUT,
+    )
+    .await?;
+
+    if !output.success() {
+        return Ok(None);
+    }
+
+    let value = output.stdout.trim();
+    if value == "null" {
+        return Ok(None);
+    }
+    Ok(Some(value.to_string()))
+}
+
+/// `adb shell settings put ...`. `true`, если настройка применилась.
+///
+/// Серийник здесь особенно важен: без `-s` adb при двух подключённых
+/// устройствах отвечает «more than one device», и «не гасить экран» молча не
+/// работало.
+pub async fn put_setting(
+    adb: &Path,
+    namespace: &str,
+    key: &str,
+    value: &str,
+    serial: Option<&str>,
+) -> Result<bool, ApiError> {
+    let output = run_adb(
+        adb,
+        &with_serial(serial, &["shell", "settings", "put", namespace, key, value]),
+        SHELL_TIMEOUT,
+    )
+    .await?;
+    Ok(output.success())
+}
+
+/// `adb shell settings delete ...` — возврат настройки, которой не было.
+pub async fn delete_setting(
+    adb: &Path,
+    namespace: &str,
+    key: &str,
+    serial: Option<&str>,
+) -> Result<bool, ApiError> {
+    let output = run_adb(
+        adb,
+        &with_serial(serial, &["shell", "settings", "delete", namespace, key]),
+        SHELL_TIMEOUT,
+    )
+    .await?;
+    Ok(output.success())
+}
+
 /// Запускает `adb pair <address>` и передаёт код спаривания в stdin.
 ///
 /// `adb pair` спрашивает код интерактивно, поэтому здесь не `output()`, а

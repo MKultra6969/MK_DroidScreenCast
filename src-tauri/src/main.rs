@@ -6,6 +6,7 @@ mod devices;
 mod error;
 mod events;
 mod paths;
+mod scrcpy;
 mod tools;
 
 use std::io::Write;
@@ -256,7 +257,8 @@ fn main() {
             api::api_disconnect,
             api::api_pair,
             api::api_tcpip,
-            api::api_adb_restart
+            api::api_adb_restart,
+            api::api_scrcpy_launch
         ])
         .manage(BackendState(Mutex::new(None)))
         .setup(|app| -> Result<(), Box<dyn std::error::Error>> {
@@ -290,6 +292,14 @@ fn main() {
                 }
                 | RunEvent::ExitRequested { .. }
                 | RunEvent::Exit => {
+                    // Настройки возвращаются до остановки бэкенда: они лежат на
+                    // чужом устройстве, и если этого не сделать здесь, то
+                    // `stay_on_while_plugged_in=3` останется на телефоне
+                    // навсегда — фоновая задача, ждущая выхода scrcpy, уйдёт
+                    // вместе с рантаймом. Очередь дренируется, поэтому три
+                    // события подряд ничего не повторят.
+                    scrcpy::restore_on_exit();
+
                     let state = app_handle.state::<BackendState>();
                     stop_backend(&state);
                 }

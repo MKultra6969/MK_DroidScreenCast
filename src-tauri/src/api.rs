@@ -16,7 +16,7 @@ use serde_json::{Map, Value, json};
 use tauri::AppHandle;
 
 use crate::error::ApiError;
-use crate::{config, devices, events, tools};
+use crate::{config, devices, events, scrcpy, tools};
 
 /// Языки веб-панели — ключи `LEXICON_WEB` из `mkdsc/i18n/lexicon_web.py`.
 ///
@@ -370,9 +370,63 @@ pub async fn api_tcpip(app: AppHandle, body: Option<Value>) -> Result<Value, Api
     }))
 }
 
+/// Зеркалит `POST /api/scrcpy/launch`.
+///
+/// Собирает аргументы, применяет настройки устройства и запускает scrcpy
+/// открепленно: приложение не ждёт его завершения, окно живёт своей жизнью.
+/// Фоновая задача дожидается выхода и возвращает настройки как было — она же
+/// добивается этого, если приложение закроют раньше (см. `scrcpy::PENDING`).
+///
+/// Ответ — `{success, pid, command, warning_key, failed_settings}`. Неудачный
+/// запуск отдаётся как `{success: false, output}` со статусом 200: интерфейс
+/// разбирает именно эту форму, а не HTTP-ошибку.
+#[tauri::command]
+pub async fn api_scrcpy_launch(app: AppHandle, body: Option<Value>) -> Result<Value, ApiError> {
+    let data = object_or_empty(body);
+    let scrcpy_bin = require_scrcpy(&app)?;
+    let adb = require_adb(&app)?;
+
+    let plan = scrcpy::LaunchPlan::resolve(&data);
+    let (restore, failed_settings) = scrcpy::apply_device_settings(
+        &adb,
+        plan.stay_awake,
+        plan.show_touches,
+        plan.serial.as_deref(),
+    )
+    .await?;
+
+    let command = scrcpy::command_line(&scrcpy_bin, &plan.args);
+    let child = match scrcpy::spawn_viewer(&scrcpy_bin, &plan.args) {
+        Ok(child) => child,
+        Err(error) => {
+            // Настройки уже применены: не вернув их здесь, мы оставили бы
+            // «не гасить экран» включённым на телефоне навсегда.
+            scrcpy::restore_device_settings(&adb, &restore, plan.serial.as_deref()).await;
+            return Ok(json!({"success": false, "output": error.detail}));
+        }
+    };
+
+    // `id()` пустеет только после `wait()`, а его тут ещё не было.
+    let pid = child.id().unwrap_or_default();
+    scrcpy::restore_when_finished(&adb, plan.serial.as_deref(), restore, child);
+
+    Ok(json!({
+        "success": true,
+        "pid": pid,
+        "command": command,
+        "warning_key": plan.warning_key,
+        "failed_settings": failed_settings,
+    }))
+}
+
 // ---------------------------------------------------------------------------
 // Вспомогательное
 // ---------------------------------------------------------------------------
+
+/// Путь к scrcpy или 503 — как `_require_scrcpy()` в Python.
+fn require_scrcpy(app: &AppHandle) -> Result<PathBuf, ApiError> {
+    tools::scrcpy_path(app).ok_or_else(|| ApiError::new(503, "scrcpy is still being prepared"))
+}
 
 /// Путь к adb или 503 — как `_require_adb()` в Python.
 ///
