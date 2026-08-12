@@ -282,6 +282,28 @@ fn truthy_or_config(
     })
 }
 
+/// Точный аналог `data.get(key) or cfg.get(key, default)`.
+///
+/// Разница с [`truthy_or_config`] тонкая, но наблюдаемая: дефолт подставляется
+/// только когда ключа в конфиге нет вовсе. Записанные туда `null` или пустая
+/// строка означают «без этого флага», и Python его действительно не добавляет.
+fn value_or_default(
+    data: &Map<String, Value>,
+    cfg: Option<&Map<String, Value>>,
+    key: &str,
+    default: &str,
+) -> Option<String> {
+    if let Some(value) = truthy_str(data, key) {
+        return Some(value);
+    }
+
+    match cfg.and_then(|cfg| cfg.get(key)) {
+        None => Some(default.to_string()),
+        Some(value) if config::is_truthy(value) => Some(config::python_str(value)),
+        Some(_) => None,
+    }
+}
+
 /// Флаг из тела запроса, иначе из конфига.
 ///
 /// Важно именно наличие ключа в теле, а не его истинность: снятая
@@ -410,16 +432,18 @@ impl RecordingPlan {
         );
 
         let mut tail = Vec::new();
-        // Дефолты повторяют `config.get("scrcpy", {}).get(..., "8M")` в Python:
-        // они подставляются, даже когда секции scrcpy в конфиге нет вовсе.
-        let bitrate = truthy_or_config(data, scrcpy_cfg, "bitrate").unwrap_or_else(|| "8M".into());
-        tail.push("--video-bit-rate".to_string());
-        tail.push(bitrate);
+        if let Some(bitrate) = value_or_default(data, scrcpy_cfg, "bitrate", "8M") {
+            tail.push("--video-bit-rate".to_string());
+            tail.push(bitrate);
+        }
+        if let Some(maxsize) = value_or_default(data, scrcpy_cfg, "maxsize", "1080") {
+            tail.push("--max-size".to_string());
+            tail.push(maxsize);
+        }
 
-        let maxsize = truthy_or_config(data, scrcpy_cfg, "maxsize").unwrap_or_else(|| "1080".into());
-        tail.push("--max-size".to_string());
-        tail.push(maxsize);
-
+        // Клавиатура — исключение: Python подстраховывается ещё раз
+        // (`_normalize_keyboard_mode(keyboard or "uhid")`), поэтому пустого
+        // значения тут не бывает и флаг добавляется всегда.
         let keyboard =
             truthy_or_config(data, scrcpy_cfg, "keyboard").unwrap_or_else(|| "uhid".to_string());
         let (keyboard, warning_key) = normalize_keyboard_mode(&keyboard);
@@ -745,6 +769,25 @@ mod tests {
         assert_eq!(plan.format, "mp4");
         assert_eq!(plan.prefix, "recording");
         assert!(plan.show_preview, "по умолчанию окно показывается");
+    }
+
+    /// Пустое значение в конфиге — это «без флага», а не «возьми дефолт».
+    ///
+    /// Так ведёт себя `data.get(...) or cfg.get(..., "8M")` в Python: дефолт
+    /// достаётся только отсутствующему ключу.
+    #[test]
+    fn recording_treats_blank_config_values_as_no_flag() {
+        let plan = recording_plan(
+            json!({}),
+            json!({"scrcpy": {"bitrate": "", "maxsize": null}}),
+        );
+        let args = plan.args(Path::new("/tmp/clip.mp4"));
+
+        assert!(!args.iter().any(|arg| arg == "--video-bit-rate"));
+        assert!(!args.iter().any(|arg| arg == "--max-size"));
+        // А вот клавиатура подставляется всегда — у неё в Python двойная
+        // подстраховка.
+        assert!(args.contains(&"--keyboard=uhid".to_string()));
     }
 
     #[test]

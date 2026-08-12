@@ -267,9 +267,15 @@ pub async fn stop() -> Value {
     // Успех проверяется только выходом процесса. Код возврата
     // `GenerateConsoleCtrlEvent` для этого не годится — он бывает
     // «успешным» и тогда, когда событие не дошло (см. `signal.rs`).
-    let graceful = tokio::time::timeout(STOP_TIMEOUT, finished.wait_for(|done| *done))
-        .await
-        .is_ok();
+    //
+    // Проверяются оба уровня: внешний `Ok` — что уложились в таймаут, внутренний
+    // — что наблюдатель действительно доложил о завершении. Пропавший наблюдатель
+    // роняет канал сразу, и по одному внешнему `Ok` остановка выглядела бы
+    // штатной, хотя scrcpy никто не дождался.
+    let graceful = matches!(
+        tokio::time::timeout(STOP_TIMEOUT, finished.wait_for(|done| *done)).await,
+        Ok(Ok(_))
+    );
 
     if !graceful {
         signal::force_kill(pid);
