@@ -12,6 +12,7 @@ import { HomePage } from './features/home/HomePage';
 import { ServiceMenuPage } from './features/service/ServiceMenuPage';
 import { apiFetch, ensureApiToken, isTauri, readJson, wsUrl } from './lib/api';
 import { confirmAction } from './lib/dialogs';
+import { DEVICE_STREAM_TIMEOUT_MS, listenDevicesUpdate } from './lib/events';
 import { getPageForSection } from './lib/navigation';
 import {
   canSelfUpdate,
@@ -143,6 +144,7 @@ function App() {
   const reconnectRef = useRef<number | null>(null);
   const wsCancelledRef = useRef(false);
   const wsRetryRef = useRef(0);
+  const streamTimerRef = useRef<number | null>(null);
   const notificationIdRef = useRef(0);
   const lastRecordingErrorRef = useRef<string | null>(null);
   // Опрос бутстрапа переживает перезапуск эффекта; предупреждение о версии
@@ -380,6 +382,32 @@ function App() {
     reconnectRef.current = window.setTimeout(connect, delay);
   }, []);
 
+  const clearStreamTimer = useCallback(() => {
+    if (streamTimerRef.current) {
+      window.clearTimeout(streamTimerRef.current);
+      streamTimerRef.current = null;
+    }
+  }, []);
+
+  /**
+   * Отмечает, что поток устройств жив.
+   *
+   * `wsConnected` кормит двух потребителей: индикатор online/offline в боковой
+   * панели и запасной HTTP-поллинг ниже. У событий Tauri нет соединения,
+   * которое можно спросить, поэтому «онлайн» здесь — «событие приходило
+   * недавно»: таймер перезапускается на каждом событии и гасит флаг, если
+   * поток встал. Оставить флаг всегда `false` нельзя — вернулся бы двойной
+   * опрос adb, всегда `true` — пропал бы запасной путь.
+   */
+  const markDeviceStreamAlive = useCallback(() => {
+    setWsConnected(true);
+    clearStreamTimer();
+    streamTimerRef.current = window.setTimeout(() => {
+      streamTimerRef.current = null;
+      setWsConnected(false);
+    }, DEVICE_STREAM_TIMEOUT_MS);
+  }, [clearStreamTimer]);
+
   const connectWebSocket = useCallback(() => {
     if (wsCancelledRef.current) return;
     try {
@@ -418,14 +446,45 @@ function App() {
     void initializeApp();
   }, [initTheme, initializeApp]);
 
+  // Поток устройств: в десктопе — события Tauri, в веб-панели — WebSocket.
   useEffect(() => {
     if (!appReady) return;
-    wsCancelledRef.current = false;
-    wsRetryRef.current = 0;
-    connectWebSocket();
+
     setDevicesLoading(true);
     setSavedLoading(true);
     void loadDevices();
+
+    if (isTauri()) {
+      // Отписка приезжает промисом. Если эффект успел размонтироваться раньше,
+      // снимаем её сразу: иначе после нескольких перезагрузок страницы
+      // накопились бы живые обработчики и каждое событие обрабатывалось бы
+      // столько раз, сколько было монтирований. Это та же ловушка, что была с
+      // WebSocket, где onclose ставил таймер уже после cleanup.
+      let cancelled = false;
+      let unlisten: (() => void) | null = null;
+
+      void listenDevicesUpdate((payload) => {
+        setActiveDevices(normalizeDevices(payload.devices));
+        setDevicesLoading(false);
+        markDeviceStreamAlive();
+      })
+        .then((stop) => {
+          if (cancelled) stop();
+          else unlisten = stop;
+        })
+        .catch((error) => console.error('device stream error', error));
+
+      return () => {
+        cancelled = true;
+        unlisten?.();
+        clearStreamTimer();
+        setWsConnected(false);
+      };
+    }
+
+    wsCancelledRef.current = false;
+    wsRetryRef.current = 0;
+    connectWebSocket();
     return () => {
       // Order matters: mark cancelled and detach onclose *before* close(),
       // otherwise the handler fires afterwards and schedules a reconnect that
@@ -444,10 +503,10 @@ function App() {
         wsRef.current = null;
       }
     };
-  }, [appReady, connectWebSocket, loadDevices]);
+  }, [appReady, clearStreamTimer, connectWebSocket, loadDevices, markDeviceStreamAlive]);
 
-  // HTTP polling is only a fallback: while the socket is up it pushes the
-  // same list every 3s, and each poll costs another blocking adb call.
+  // HTTP polling is only a fallback: while the device stream is up it pushes
+  // the same list every 3s, and each poll costs another blocking adb call.
   useEffect(() => {
     if (!appReady || wsConnected) return;
     const intervalId = window.setInterval(loadDevices, 5000);
