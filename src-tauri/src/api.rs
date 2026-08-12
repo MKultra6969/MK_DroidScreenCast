@@ -350,9 +350,10 @@ pub async fn api_tcpip(app: AppHandle, body: Option<Value>) -> Result<Value, Api
     let output = devices::tcpip(&adb, serial.as_deref(), &config::python_str(&port)).await?;
     let success = output.success();
 
-    let ip = match success {
-        true => devices::wifi_ip(&adb, serial.as_deref()).await?,
-        false => None,
+    let ip = if success {
+        devices::wifi_ip(&adb, serial.as_deref()).await?
+    } else {
+        None
     };
 
     // `adb tcpip` перезапускает adbd на устройстве, и по USB оно на секунду
