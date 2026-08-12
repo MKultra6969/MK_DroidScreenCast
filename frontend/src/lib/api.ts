@@ -86,6 +86,11 @@ const IPC_ROUTES: IpcRoute[] = [
   { method: 'GET', pattern: '/api/presets', command: 'api_presets' },
   { method: 'POST', pattern: '/api/presets', command: 'api_presets_save' },
   { method: 'DELETE', pattern: '/api/presets/{name}', command: 'api_presets_delete' },
+  { method: 'POST', pattern: '/api/connect', command: 'api_connect' },
+  { method: 'POST', pattern: '/api/disconnect', command: 'api_disconnect' },
+  { method: 'POST', pattern: '/api/pair', command: 'api_pair' },
+  { method: 'POST', pattern: '/api/tcpip', command: 'api_tcpip' },
+  { method: 'POST', pattern: '/api/adb/restart', command: 'api_adb_restart' },
 ];
 
 type IpcMatch = {
