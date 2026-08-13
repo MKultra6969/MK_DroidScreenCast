@@ -85,8 +85,8 @@ fn client() -> &'static reqwest::Client {
         reqwest::Client::builder()
             .timeout(REQUEST_TIMEOUT)
             .build()
-            // Сборка клиента по умолчанию не падает; если всё же упала —
-            // клиент без настроек лучше, чем паника в команде.
+            // Собрать клиента мешает только сломанный системный TLS, а здесь
+            // и TLS-то не нужен — запрос уходит на localhost по http.
             .unwrap_or_default()
     })
 }
