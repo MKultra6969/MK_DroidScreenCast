@@ -14,8 +14,8 @@ use crate::error::ApiError;
 /// Куда отправлять пользователя, если у релиза нет своей страницы.
 ///
 /// Адреса записаны целиком, а не собраны из владельца и имени репозитория:
-/// склеить их в `const` без внешнего крейта нельзя, а тест
-/// `repo_constants_match_python` всё равно сверяет их с `mkdsc/constants.py`.
+/// склеить их в `const` без внешнего крейта нельзя. Второй адрес — тот же
+/// репозиторий, и менять их надо парой.
 const RELEASES_URL: &str = "https://github.com/MKultra6969/MK_DroidScreenCast/releases/latest";
 
 /// API последнего релиза — `API_LATEST_RELEASE` в `mkdsc/constants.py`.
@@ -188,36 +188,4 @@ mod tests {
         assert_eq!(empty["assets"], json!([]));
     }
 
-    /// Адреса репозитория обязаны совпадать с `mkdsc/constants.py`: релизы
-    /// публикуются в одно место, а проверок теперь две.
-    #[test]
-    fn repo_constants_match_python() {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .expect("src-tauri лежит в корне репозитория")
-            .join("mkdsc")
-            .join("constants.py");
-        let source = std::fs::read_to_string(&path).expect("constants.py на месте");
-
-        let value_of = |name: &str| {
-            source
-                .lines()
-                .find_map(|line| line.strip_prefix(&format!("{name} = \"")))
-                .and_then(|rest| rest.split('"').next())
-                .map(str::to_string)
-                .unwrap_or_else(|| panic!("{name} не найден"))
-        };
-
-        let owner = value_of("REPO_OWNER");
-        let repo = value_of("REPO_NAME");
-
-        assert_eq!(
-            RELEASES_URL,
-            format!("https://github.com/{owner}/{repo}/releases/latest")
-        );
-        assert_eq!(
-            API_LATEST_RELEASE,
-            format!("https://api.github.com/repos/{owner}/{repo}/releases/latest")
-        );
-    }
 }

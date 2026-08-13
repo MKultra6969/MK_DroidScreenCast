@@ -41,10 +41,6 @@ jobs:
         with:
           node-version: '20'
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: '1.85'
@@ -52,13 +48,6 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
-
-      - name: Install Python build dependencies
-        run: pip install -r requirements-dev.txt
-
-      # PyInstaller bundle the Tauri launcher spawns as bin/mkdsc-backend.
-      - name: Build backend binary
-        run: npm run tauri:backend:build
 
       - name: Install npm dependencies
         run: |

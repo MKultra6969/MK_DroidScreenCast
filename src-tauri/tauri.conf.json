@@ -41,14 +41,6 @@
     "icon": [
       "icons/icon.ico",
       "icons/icon.png"
-    ],
-    "resources": [
-      "../bin",
-      "../mkdsc",
-      "../templates",
-      "../static",
-      "../tauri_backend.py",
-      "../requirements.txt"
     ]
   }
 }

@@ -10,7 +10,7 @@ import { AutomationPage } from './features/automation/AutomationPage';
 import { FilesPage } from './features/files/FilesPage';
 import { HomePage } from './features/home/HomePage';
 import { ServiceMenuPage } from './features/service/ServiceMenuPage';
-import { apiFetch, isTauri, readJson } from './lib/api';
+import { apiFetch, readJson } from './lib/api';
 import { confirmAction } from './lib/dialogs';
 import { DEVICE_STREAM_TIMEOUT_MS, listenDevicesUpdate } from './lib/events';
 import { getPageForSection } from './lib/navigation';
@@ -944,33 +944,6 @@ function App() {
     }
   };
 
-  const downloadLogs = useCallback(async () => {
-    notify('success', 'notification_download_started');
-    try {
-      const response = await apiFetch('/api/logs/download');
-      if (!response.ok) {
-        throw new Error(`download failed: ${response.status}`);
-      }
-      const blob = await response.blob();
-      const disposition = response.headers.get('content-disposition');
-      const nameMatch = disposition?.match(/filename\*?=(?:UTF-8'')?["']?([^"';\n]+)/i);
-      const filename = nameMatch?.[1] ? decodeURIComponent(nameMatch[1]) : 'logs.zip';
-
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      link.style.display = 'none';
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
-    } catch (error) {
-      console.error('downloadLogs error', error);
-      notify('error', 'notification_download_failed');
-    }
-  }, [notify]);
-
   const pickLogsExportDir = useCallback(async () => {
     try {
       const { open } = await import('@tauri-apps/plugin-dialog');
@@ -1119,13 +1092,9 @@ function App() {
     if (!targetDir) {
       const selected = await selectLogsExportDir();
       if (!selected) {
-        // In the desktop build the blob download silently does nothing, so
-        // failing loudly beats pretending something happened.
-        if (isTauri()) {
-          notify('error', 'notification_logs_export_failed');
-          return;
-        }
-        await downloadLogs();
+        // Каталог не выбран — экспортировать некуда. Молчать здесь нельзя:
+        // пользователь нажал кнопку и ждёт файл.
+        notify('error', 'notification_logs_export_failed');
         return;
       }
       targetDir = selected;
@@ -1149,7 +1118,7 @@ function App() {
       console.error('exportLogs error', error);
       notify('error', 'notification_logs_export_failed');
     }
-  }, [downloadLogs, formatMessage, logsExportDir, notify, notifyMessage, selectLogsExportDir]);
+  }, [formatMessage, logsExportDir, notify, notifyMessage, selectLogsExportDir]);
 
   const loadFullConfig = useCallback(
     async (silent = false) => {
@@ -1484,42 +1453,24 @@ function App() {
     }
   };
 
-  const downloadScreenshot = async (id: string, filename: string) => {
+  const downloadScreenshot = async (id: string) => {
     try {
-      if (isTauri()) {
-        // blob + <a download> does nothing inside WebView2, so the backend
-        // writes the file to the downloads folder itself.
-        const response = await apiFetch(`/api/screenshots/${id}/save`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({})
-        });
-        const data = await readJson<{ success?: boolean; path?: string; detail?: string }>(response);
-        if (!response.ok || !data.success) {
-          notifyMessage('error', fileErrorMessage(data, t('notification_screenshot_download_failed')));
-          return;
-        }
-        notifyMessage(
-          'success',
-          formatMessage('notification_screenshot_saved_to', { path: data.path || '' })
-        );
+      // Скачивание через blob и `<a download>` внутри WebView молча ничего не
+      // делает, поэтому файл кладёт на диск бэкенд.
+      const response = await apiFetch(`/api/screenshots/${id}/save`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      const data = await readJson<{ success?: boolean; path?: string; detail?: string }>(response);
+      if (!response.ok || !data.success) {
+        notifyMessage('error', fileErrorMessage(data, t('notification_screenshot_download_failed')));
         return;
       }
-      const response = await apiFetch(`/api/screenshots/${id}`);
-      if (!response.ok) {
-        throw new Error(`download failed: ${response.status}`);
-      }
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename || `screenshot_${id}.png`;
-      link.style.display = 'none';
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
-      notify('success', 'notification_screenshot_downloaded');
+      notifyMessage(
+        'success',
+        formatMessage('notification_screenshot_saved_to', { path: data.path || '' })
+      );
     } catch (error) {
       console.error('downloadScreenshot error', error);
       notify('error', 'notification_screenshot_download_failed');
@@ -1700,40 +1651,21 @@ function App() {
   const downloadFile = async (entry: FileEntry) => {
     if (entry.is_dir) return;
     try {
-      if (isTauri()) {
-        const response = await apiFetch(withFileSerial('/api/files/pull'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ path: entry.path })
-        });
-        const data = await readJson<{ success?: boolean; path?: string; error?: string; detail?: string }>(response);
-        if (!response.ok || !data.success) {
-          const message = fileErrorMessage(
-            data,
-            formatMessage('notification_file_download_failed', { name: entry.name })
-          );
-          notifyMessage('error', message);
-          return;
-        }
-        notifyMessage('success', formatMessage('notification_file_saved_to', { path: data.path || '' }));
+      const response = await apiFetch(withFileSerial('/api/files/pull'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: entry.path })
+      });
+      const data = await readJson<{ success?: boolean; path?: string; detail?: string }>(response);
+      if (!response.ok || !data.success) {
+        const message = fileErrorMessage(
+          data,
+          formatMessage('notification_file_download_failed', { name: entry.name })
+        );
+        notifyMessage('error', message);
         return;
       }
-      const url = withFileSerial(`/api/files/download?path=${encodeURIComponent(entry.path)}`);
-      const response = await apiFetch(url);
-      if (!response.ok) {
-        throw new Error(`download failed: ${response.status}`);
-      }
-      const blob = await response.blob();
-      const objectUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = objectUrl;
-      link.download = entry.name || 'download';
-      link.style.display = 'none';
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 1000);
-      notifyMessage('success', formatMessage('notification_file_downloaded', { name: entry.name }));
+      notifyMessage('success', formatMessage('notification_file_saved_to', { path: data.path || '' }));
     } catch (error) {
       console.error('downloadFile error', error);
       notifyMessage('error', formatMessage('notification_file_download_failed', { name: entry.name }));
@@ -1932,37 +1864,6 @@ function App() {
       notify('error', 'notification_upload_failed');
     }
   };
-
-  const uploadFiles = async (fileList: FileList, destination: string) => {
-    if (!fileList.length) return;
-    setFilesBusy(true);
-    let successCount = 0;
-    const total = fileList.length;
-    try {
-      for (const file of Array.from(fileList)) {
-        const formData = new FormData();
-        formData.append('file', file);
-        const url = withFileSerial(`/api/files/upload?destination=${encodeURIComponent(destination)}`);
-        const response = await apiFetch(url, {
-          method: 'POST',
-          body: formData
-        });
-        const data = await readJson<{ success?: boolean; error?: string }>(response);
-        if (response.ok && data.success) {
-          successCount += 1;
-        } else {
-          notifyMessage('error', formatMessage('notification_file_upload_failed', { name: file.name }));
-        }
-      }
-      await finishUpload(successCount, total, destination);
-    } catch (error) {
-      console.error('uploadFiles error', error);
-      notify('error', 'notification_upload_failed');
-    } finally {
-      setFilesBusy(false);
-    }
-  };
-
 
   const scrcpyOptions = useMemo(() => {
     return activeDevices.map((device) => ({
@@ -2165,7 +2066,6 @@ function App() {
                 setDownloadsBaseDir={setDownloadsBaseDir}
                 saveDownloadsBaseDir={saveDownloadsBaseDir}
                 selectDownloadsBaseDir={selectDownloadsBaseDir}
-                downloadLogs={downloadLogs}
                 exportLogs={exportLogs}
                 checkUpdates={checkUpdates}
                 updateProgress={updateProgress}
@@ -2232,10 +2132,7 @@ function App() {
                 moveEntry={moveEntry}
                 readFile={readFile}
                 writeFile={writeFile}
-                uploadFiles={uploadFiles}
-                // В вебе остаётся `<input type=file>`: там содержимое уезжает
-                // multipart'ом, и системный диалог не нужен.
-                pickUpload={isTauri() ? pickUpload : undefined}
+                pickUpload={pickUpload}
                 filesPage={filesPage}
                 filesPageSize={filesPageSize}
                 filesTotal={filesTotal}

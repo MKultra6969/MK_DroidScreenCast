@@ -1,6 +1,8 @@
 # Build Guide
 
-This project uses a Python backend, a React frontend, and a Tauri shell.
+This project is a React frontend inside a Tauri shell, with all of the logic in
+Rust. There is no separate backend process any more — the Python one was
+removed once every endpoint had moved to Tauri IPC.
 
 Supported targets are **Linux x64 and Windows x64**. macOS is not supported and
 is not built in CI.
@@ -9,24 +11,18 @@ is not built in CI.
 - Node.js 18+ (or 20+)
 - Rust **1.85 or newer** — `src-tauri` uses edition 2024, and older toolchains
   fail with a confusing "unknown edition" error
-- Python 3.10+
 
 ## Common setup
 ```bash
-python -m venv .venv
-.\.venv\Scripts\activate  # Windows
-source .venv/bin/activate # Linux
-pip install -r requirements.txt   # requirements-dev.txt to also get PyInstaller + pytest
 npm install
 npm --prefix frontend install
 ```
 
 ## Checks
 ```bash
-python -m pytest                  # backend tests
 npm --prefix frontend run lint
 npm --prefix frontend run typecheck
-npm --prefix frontend run build   # also refreshes the committed static/ bundle
+npm --prefix frontend run build
 ```
 
 ```bash
@@ -34,16 +30,11 @@ cd src-tauri && cargo test && cargo clippy --all-targets
 ```
 
 Anything under `src-tauri` links the real Tauri crate, so even `cargo test`
-runs the Tauri build script — and that script fails unless two paths declared
-in `tauri.conf.json` already exist:
+runs the Tauri build script — and that script fails unless the frontend bundle
+declared in `tauri.conf.json` already exists. It is a build output and is
+gitignored, so a fresh clone needs `npm run tauri:build` first (an empty
+`frontend/dist-tauri/` is enough when you only want the tests).
 
-- `bin/` — the backend bundle (`npm run tauri:backend:build`). An empty
-  directory is enough to satisfy the check when you only want the tests.
-- `frontend/dist-tauri/` — the desktop frontend bundle (`npm run tauri:build`).
-
-`static/` holds the bundle served by the web panel (`python web_panel.py`).
-Rebuild and commit it whenever `frontend/src` changes, or the web UI will lag
-behind the API.
 
 ## External tools (adb / scrcpy)
 
@@ -54,8 +45,8 @@ instead of installing an unchecked binary.
 
 | Tool | Pinned in | Integrity source |
 |---|---|---|
-| scrcpy | `SCRCPY_PINNED_VERSION` in `mkdsc/tools.py` | `SHA256SUMS.txt` published in the GitHub release |
-| platform-tools (adb) | `PLATFORM_TOOLS_REVISION` in `mkdsc/tools.py` | `PLATFORM_TOOLS_SHA256`, hard-coded in the same file |
+| scrcpy | `SCRCPY_PINNED_VERSION` in `src-tauri/src/install.rs` | `SHA256SUMS.txt` published in the GitHub release |
+| platform-tools (adb) | `PLATFORM_TOOLS_REVISION` in `src-tauri/src/install.rs` | `PLATFORM_TOOLS_*_SHA256`, hard-coded in the same file |
 
 ### Why platform-tools checksums are hard-coded
 
@@ -108,29 +99,16 @@ the manifest before committing the new SHA-256 values.
 | `MKDSC_SCRCPY_VERSION` | download a different scrcpy release (e.g. `3.3.4`) |
 
 A scrcpy outside the tested range still starts, but logs a warning and shows it
-in the UI — the flag set is only verified for the range in `mkdsc/tools.py`.
-
-## Backend data files
-
-`npm run tauri:backend:build` freezes the Python backend with PyInstaller,
-which only follows imports — any non-`.py` file the backend reads at runtime
-has to be listed in `DATA_FILES` in `scripts/build_tauri_backend.py`, or the
-frozen binary dies with `FileNotFoundError` while the sources work fine.
-
-Currently bundled: `mkdsc/i18n/lexicon_web.json` — the UI string dictionary,
-read by both `mkdsc/i18n/lexicon_web.py` and (through `include_str!`)
-`src-tauri/src/i18n.rs`.
+in the UI — the flag set is only verified for the range in `src-tauri/src/install.rs`.
 
 ## Windows (release build)
 ```bash
-npm run tauri:backend:build
 npm run tauri build
 ```
 
 ## Linux (release build)
 Install Tauri system dependencies for your distro (WebKit2GTK, GTK, and system tray libs).
 ```bash
-npm run tauri:backend:build
 npm run tauri build
 ```
 
@@ -140,11 +118,6 @@ Release artifacts are built on `ubuntu-22.04`, so they link against **glibc
 2.35**. Anything older will refuse to start with a `GLIBC_2.35 not found`
 loader error. In practice that means **Ubuntu 22.04+ / Debian 12+** or an
 equally recent distro; older systems have to build from source.
-
-## One-shot build
-```bash
-npm run tauri:build:full
-```
 
 ## Updater signing key (required for release builds)
 
@@ -186,8 +159,8 @@ falls back to opening the GitHub release page instead of updating in place.
 - **Desktop app** — `tauri-plugin-updater` reads
   `https://github.com/MKultra6969/MK_DroidScreenCast/releases/latest/download/latest.json`,
   verifies the signature, installs and relaunches.
-- **Web panel / CLI from a clone** — no self-update. `GET /api/update/check`
-  compares versions and the UI offers the release page. The old behaviour
-  (downloading a source zipball over the install directory) is gone: it needed
-  admin rights, shipped `.py` files an installed build never runs, and could
-  not restart anything.
+- **Unsigned or portable builds** — no self-update. `api_update_check` compares
+  versions against the GitHub releases API and the UI offers the release page.
+  The old behaviour (downloading a source zipball over the install directory)
+  is gone: it needed admin rights, shipped files an installed build never runs,
+  and could not restart anything.

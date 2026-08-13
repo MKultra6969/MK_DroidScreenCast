@@ -7,7 +7,6 @@
 <br>
 *Подключайте устройство, запускайте scrcpy, записывайте экран и управляйте файлами в одном окне.*
 
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Tauri](https://img.shields.io/badge/Tauri-Desktop-24C8DB?style=for-the-badge&logo=tauri&logoColor=white)](https://tauri.app/)
 [![Scrcpy](https://img.shields.io/badge/Powered_by-Scrcpy-green?style=for-the-badge&logo=android)](https://github.com/Genymobile/scrcpy)
 [![Version](https://img.shields.io/badge/Version-1.0.2-2ea44f?style=for-the-badge)](#)
@@ -57,7 +56,7 @@
 2.  Установите и запустите MK DroidScreenCast.
 
 ### Сборка из исходников
-См. `docs/build.md` для зависимостей (Node 18+, Rust, Python 3.10+) и команд сборки.
+См. `docs/build.md` для зависимостей (Node 18+, Rust 1.85+) и команд сборки.
 
 ---
 
@@ -80,14 +79,11 @@
 
 ```text
 MK_DroidScreenCast/
-├── frontend/          # Desktop UI (Tauri)
-├── src-tauri/         # Rust shell
-├── mkdsc/             # Python backend (ADB/Scrcpy logic)
-├── bin/               # Bundled backend binaries
+├── frontend/          # Desktop UI (React + Tauri)
+├── src-tauri/         # Rust: логика приложения и IPC
 ├── downloads/         # ADB/Scrcpy cache
 ├── logs/              # Logs and diagnostics
 ├── config.json        # App settings
-├── tauri_backend.py   # Backend entry point
 └── docs/              # Build notes
 ```
 

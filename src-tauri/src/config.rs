@@ -1003,30 +1003,31 @@ mod tests {
         );
     }
 
-    /// Версия в `Cargo.toml` уходит в `GET /api/config`; она обязана совпадать
-    /// с `mkdsc/constants.py::VERSION`, иначе UI покажет чужой номер.
+    /// Версия в `Cargo.toml` уходит в `GET /api/config` и в имя пакета, а
+    /// объявлена она ещё в трёх местах. Разъехавшись, они дают приложение,
+    /// которое показывает один номер, ставится под другим и обновляется до
+    /// третьего.
     #[test]
-    fn version_matches_python_constant() {
-        let source = std::fs::read_to_string(repo_root().join("mkdsc").join("constants.py"))
-            .expect("mkdsc/constants.py на месте");
-        let python_version = source
-            .lines()
-            .find_map(|line| line.strip_prefix("VERSION = "))
-            .map(|value| value.trim().trim_matches('"').to_string())
-            .expect("VERSION найден");
-        assert_eq!(python_version, env!("CARGO_PKG_VERSION"));
-    }
+    fn version_is_the_same_everywhere() {
+        let root = repo_root();
+        let version = env!("CARGO_PKG_VERSION");
 
-    /// То же для версии схемы конфига.
-    #[test]
-    fn schema_version_matches_python_constant() {
-        let source = std::fs::read_to_string(repo_root().join("mkdsc").join("constants.py"))
-            .expect("mkdsc/constants.py на месте");
-        let python_version = source
-            .lines()
-            .find_map(|line| line.strip_prefix("CONFIG_SCHEMA_VERSION = "))
-            .and_then(|value| value.trim().parse::<i64>().ok())
-            .expect("CONFIG_SCHEMA_VERSION найден");
-        assert_eq!(python_version, CONFIG_SCHEMA_VERSION);
+        for (path, key) in [
+            (root.join("package.json"), "\"version\""),
+            (root.join("frontend").join("package.json"), "\"version\""),
+            (
+                root.join("src-tauri").join("tauri.conf.json"),
+                "\"version\"",
+            ),
+        ] {
+            let source = std::fs::read_to_string(&path)
+                .unwrap_or_else(|_| panic!("{} на месте", path.display()));
+            let declared = source
+                .lines()
+                .find_map(|line| line.trim().strip_prefix(key)?.trim().strip_prefix(':'))
+                .map(|value| value.trim().trim_end_matches(',').trim_matches('"').to_string())
+                .unwrap_or_else(|| panic!("версия не найдена в {}", path.display()));
+            assert_eq!(declared, version, "версия разъехалась в {}", path.display());
+        }
     }
 }

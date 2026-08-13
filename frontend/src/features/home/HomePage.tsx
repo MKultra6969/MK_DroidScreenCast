@@ -76,7 +76,6 @@ type HomePageProps = {
   setDownloadsBaseDir: Dispatch<SetStateAction<string>>;
   saveDownloadsBaseDir: (nextDir: string) => void | Promise<void>;
   selectDownloadsBaseDir: () => void | Promise<string | null>;
-  downloadLogs: () => void | Promise<void>;
   exportLogs: () => void | Promise<void>;
   checkUpdates: () => void | Promise<void>;
   updateProgress: string;
@@ -135,7 +134,6 @@ export function HomePage({
   setDownloadsBaseDir,
   saveDownloadsBaseDir,
   selectDownloadsBaseDir,
-  downloadLogs,
   exportLogs,
   checkUpdates,
   updateProgress,
@@ -1288,19 +1286,6 @@ export function HomePage({
                       >
                         <Download className="h-4 w-4" />
                         {t('logs_export_button')}
-                      </button>
-                      {/* The prop was wired up but never rendered, so the
-                          logs.zip download was unreachable from the UI. */}
-                      <button
-                        className={cn(
-                          'inline-flex items-center gap-2 rounded-full border border-transparent bg-[var(--md-sys-color-secondary-container)] px-4 py-2 text-sm font-semibold',
-                          'text-[var(--button-secondary-text)] shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]',
-                          'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-outline)]'
-                        )}
-                        onClick={() => void downloadLogs()}
-                      >
-                        <Download className="h-4 w-4" />
-                        {t('download_logs')}
                       </button>
                       <button
                         className={cn(

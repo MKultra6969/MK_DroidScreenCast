@@ -1,26 +1,23 @@
-//! Строки интерфейса — Rust-половина `GET /api/i18n`.
+//! Строки интерфейса — данные для `GET /api/i18n`.
 //!
-//! Словарь не дублируется: и Python (`mkdsc/i18n/lexicon_web.py`), и Rust
-//! читают один и тот же `mkdsc/i18n/lexicon_web.json`. Пока живы обе панели,
-//! два независимых словаря разъехались бы на первой же правке, а половина
-//! строк приходит в UI именно отсюда.
-//!
-//! Файл встраивается в бинарь на компиляции (`include_str!`), поэтому на диске
-//! рядом с приложением ему быть не нужно.
+//! Словарь лежит рядом в `lexicon_web.json` и встраивается в бинарь на
+//! компиляции (`include_str!`), поэтому на диске рядом с приложением ему быть
+//! не нужно. JSON, а не литерал в коде: файл на 500 строк удобнее править и
+//! сверять глазами, а до вехи 7 его читал ещё и Python-бэкенд.
 
 use std::sync::OnceLock;
 
 use serde_json::{Map, Value, json};
 
-/// Словарь как есть — тот же файл, что читает Python.
-const LEXICON_JSON: &str = include_str!("../../mkdsc/i18n/lexicon_web.json");
+/// Словарь как есть.
+const LEXICON_JSON: &str = include_str!("lexicon_web.json");
 
-/// Языки веб-панели — ключи `lexicon_web.json`.
+/// Языки интерфейса — ключи `lexicon_web.json`.
 ///
 /// Список объявлен здесь, а не выводится из словаря: он уезжает в
 /// `GET /api/config` и определяет содержимое переключателя языка, то есть это
 /// контракт с интерфейсом. За тем, чтобы он не разъехался со словарём, следит
-/// тест `languages_match_python_lexicon`.
+/// тест `lexicon_parses`.
 pub const LANGUAGES: [&str; 2] = ["en", "ru"];
 
 /// Язык по умолчанию: и запасной словарь, и ответ на незнакомый `lang`.
@@ -82,34 +79,17 @@ fn strings(language: &str) -> Value {
 mod tests {
     use super::*;
 
+    /// Встроенный словарь разбирается, и в нём есть ровно объявленные языки:
+    /// список уезжает в `GET /api/config` и определяет переключатель языка.
     #[test]
     fn lexicon_parses() {
-        assert!(lexicon().len() >= 2, "языков в словаре меньше двух");
+        let languages: Vec<&str> = lexicon().keys().map(String::as_str).collect();
+        assert_eq!(languages, LANGUAGES.to_vec());
+
         for language in LANGUAGES {
             let map = language_map(language).expect("язык на месте");
             assert!(!map.is_empty(), "словарь {language} пуст");
         }
-    }
-
-    /// Список языков обязан совпадать с ключами словаря: он уезжает в
-    /// `GET /api/config` и определяет содержимое переключателя языка.
-    ///
-    /// Тест с вехи 2. Тогда он разбирал `lexicon_web.py`, теперь читает JSON с
-    /// диска — тот самый файл, что читает Python: сравнение с встроенной копией
-    /// доказывало бы только то, что `include_str!` работает.
-    #[test]
-    fn languages_match_python_lexicon() {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .expect("src-tauri лежит в корне репозитория")
-            .join("mkdsc")
-            .join("i18n")
-            .join("lexicon_web.json");
-        let source = std::fs::read_to_string(&path).expect("lexicon_web.json на месте");
-        let parsed: Map<String, Value> = serde_json::from_str(&source).expect("это объект");
-
-        let languages: Vec<&str> = parsed.keys().map(String::as_str).collect();
-        assert_eq!(languages, LANGUAGES.to_vec());
     }
 
     #[test]

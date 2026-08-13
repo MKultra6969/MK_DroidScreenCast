@@ -4,12 +4,11 @@
   "version": "1.0.2",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "dev": "vite --config vite.tauri.config.ts",
+    "build": "tsc --noEmit && vite build --config vite.tauri.config.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "preview": "vite preview",
     "tauri": "npm --prefix .. run tauri"
   },
   "dependencies": {

@@ -1,10 +1,10 @@
-//! Пути приложения — Rust-половина `mkdsc/paths.py`.
+//! Пути приложения.
 //!
-//! Пока Python-бэкенд жив, оба процесса работают с одним и тем же
-//! `config.json` и одним и тем же `downloads/`, поэтому расходиться в
-//! вычислении путей нельзя. Согласованность держится на том, что `main.rs`
-//! передаёт бэкенду вычисленные здесь значения через `MKDSC_BASE_DIR` и
-//! `MKDSC_DATA_DIR`.
+//! Раскладка досталась от Python-бэкенда и намеренно не менялась при его
+//! удалении: `config.json`, `downloads/`, `logs/`, записи и скриншоты остаются
+//! там же, где их оставила прошлая версия. `MKDSC_BASE_DIR` и `MKDSC_DATA_DIR`
+//! позволяют увести данные в другое место — этим пользуются сборки, которые
+//! держат всё рядом с исполняемым файлом.
 
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -24,12 +24,12 @@ pub fn data_dir(app: &AppHandle) -> &'static Path {
     DATA_DIR.get_or_init(|| resolve_data_dir(app)).as_path()
 }
 
-/// `DATA_DIR/downloads` — сюда Python распаковывает adb и scrcpy.
+/// `DATA_DIR/downloads` — сюда распаковываются adb и scrcpy.
 pub fn downloads_dir(app: &AppHandle) -> PathBuf {
     data_dir(app).join("downloads")
 }
 
-/// `DATA_DIR/config.json` — тот же файл, что читает Python.
+/// `DATA_DIR/config.json`.
 pub fn config_path(app: &AppHandle) -> PathBuf {
     data_dir(app).join("config.json")
 }
@@ -37,8 +37,7 @@ pub fn config_path(app: &AppHandle) -> PathBuf {
 /// Каталог для записей по умолчанию — `get_recordings_dir` в `mkdsc/paths.py`.
 ///
 /// Если пользователь задал `downloads.base_dir`, записи уезжают в его
-/// подкаталог `video`, иначе — в `DATA_DIR/recordings`. Расходиться с Python
-/// нельзя: пока живы обе панели, они должны показывать одни и те же файлы.
+/// подкаталог `video`, иначе — в `DATA_DIR/recordings`.
 pub fn recordings_dir(app: &AppHandle, config: &serde_json::Map<String, serde_json::Value>) -> PathBuf {
     match downloads_base_dir(config) {
         Some(base) if base != data_dir(app) => base.join("video"),
@@ -46,10 +45,7 @@ pub fn recordings_dir(app: &AppHandle, config: &serde_json::Map<String, serde_js
     }
 }
 
-/// Каталог логов — `get_logs_dir` в `mkdsc/paths.py`.
-///
-/// Логи пишет Python, а забирает их отсюда экспорт: разойтись нельзя, иначе
-/// архив уедет пустым.
+/// Каталог логов — отсюда их забирает `POST /api/logs/export`.
 pub fn logs_dir(app: &AppHandle, config: &serde_json::Map<String, serde_json::Value>) -> PathBuf {
     match downloads_base_dir(config) {
         Some(base) if base != data_dir(app) => base.join("logs"),
@@ -68,12 +64,12 @@ pub fn screenshots_dir(
     }
 }
 
-/// Куда складывать скачанное с устройства — `_resolve_download_dir`.
+/// Куда складывать скачанное с устройства.
 ///
 /// Обратите внимание на несимметричность с логами и скриншотами: при заданном
 /// `downloads.base_dir` файлы кладутся прямо в него, без подкаталога, а при
-/// незаданном — в `DATA_DIR/downloads`. Так это работает в Python, и менять
-/// нельзя: пользователь ищет файлы там, куда их клал прошлый релиз.
+/// незаданном — в `DATA_DIR/downloads`. Менять нельзя: пользователь ищет файлы
+/// там, куда их клал прошлый релиз.
 pub fn download_dir(app: &AppHandle, config: &serde_json::Map<String, serde_json::Value>) -> PathBuf {
     match downloads_base_dir(config) {
         Some(base) if base != data_dir(app) => base,
@@ -100,8 +96,8 @@ pub fn expand_user(path: &str) -> PathBuf {
     let Some(rest) = path.strip_prefix('~') else {
         return PathBuf::from(path);
     };
-    // Раскрывается только «~» и «~/...»: `~user` Python на Windows тоже не
-    // разбирает, а гадать за пользователя тут не из чего.
+    // Раскрывается только «~» и «~/...»: что такое `~user` на Windows, всё
+    // равно не определено, а гадать за пользователя тут не из чего.
     if !rest.is_empty() && !rest.starts_with(['/', '\\']) {
         return PathBuf::from(path);
     }
@@ -127,9 +123,8 @@ fn home_dir() -> Option<PathBuf> {
 /// `BASE_DIR/devices.json` — формат до появления `config.json`.
 ///
 /// Читается только миграцией, и только пока список устройств пуст. Путь идёт
-/// от `BASE_DIR`, а не от `DATA_DIR`: так его считает `mkdsc/paths.py`, и
-/// разойтись здесь означало бы потерять устройства у тех, кто обновляется со
-/// старой версии.
+/// от `BASE_DIR`, а не от `DATA_DIR`: так его клала старая версия, и разойтись
+/// здесь означало бы потерять устройства у тех, кто обновляется с неё.
 pub fn legacy_devices_path(app: &AppHandle) -> PathBuf {
     base_dir(app).join("devices.json")
 }
@@ -139,43 +134,24 @@ fn resolve_base_dir(app: &AppHandle) -> PathBuf {
         return PathBuf::from(explicit);
     }
 
-    let mut candidates: Vec<PathBuf> = Vec::new();
+    // Каталог установки. Раньше он опознавался по файлам Python-бэкенда,
+    // которых больше нет, поэтому берём ресурсный каталог приложения, а в
+    // разработке — корень репозитория.
     if let Ok(dir) = app.path().resource_dir() {
-        candidates.push(dir.clone());
-        candidates.push(dir.join("app"));
-        candidates.push(dir.join("_up_"));
-    }
-    if let Ok(dir) = std::env::current_dir() {
-        candidates.push(dir.clone());
-        if let Some(parent) = dir.parent() {
-            candidates.push(parent.to_path_buf());
-        }
+        return dir;
     }
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     if let Some(parent) = manifest_dir.parent() {
-        candidates.push(parent.to_path_buf());
-    }
-
-    let exe_suffix = if cfg!(windows) { ".exe" } else { "" };
-    let backend_name = format!("mkdsc-backend{exe_suffix}");
-
-    for base in candidates {
-        if base.join("tauri_backend.py").exists()
-            || base.join("bin").join(&backend_name).exists()
-            || base.join("mkdsc").exists()
-        {
-            return base;
-        }
+        return parent.to_path_buf();
     }
 
     std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
 }
 
 fn resolve_data_dir(app: &AppHandle) -> PathBuf {
-    // `MKDSC_DATA_DIR` идёт первым — как в `mkdsc/paths.py`. Раньше здесь
-    // переменная не проверялась, и запуск с внешним каталогом данных развёл
-    // бы Rust и Python по разным `config.json`.
+    // `MKDSC_DATA_DIR` идёт первым: запуск с внешним каталогом данных должен
+    // уводить туда всё, включая конфиг.
     if let Some(explicit) = std::env::var_os("MKDSC_DATA_DIR") {
         return PathBuf::from(explicit);
     }

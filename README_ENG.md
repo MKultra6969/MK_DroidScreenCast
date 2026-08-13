@@ -7,7 +7,6 @@
 <br>
 *Connect, mirror, record, and manage devices from one native app.*
 
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Tauri](https://img.shields.io/badge/Tauri-Desktop-24C8DB?style=for-the-badge&logo=tauri&logoColor=white)](https://tauri.app/)
 [![Scrcpy](https://img.shields.io/badge/Powered_by-Scrcpy-green?style=for-the-badge&logo=android)](https://github.com/Genymobile/scrcpy)
 [![Version](https://img.shields.io/badge/Version-1.0.2-2ea44f?style=for-the-badge)](#)
@@ -55,7 +54,7 @@ MK DroidScreenCast is a full desktop application that wraps `adb` and `scrcpy` w
 2.  Install and launch MK DroidScreenCast.
 
 ### Build from source
-See `docs/build.md` for prerequisites (Node 18+, Rust, Python 3.10+) and build commands.
+See `docs/build.md` for prerequisites (Node 18+, Rust 1.85+) and build commands.
 
 ---
 
@@ -78,14 +77,11 @@ Settings live in `config.json` and can be edited in-app under Settings > Config.
 
 ```text
 MK_DroidScreenCast/
-├── frontend/          # Desktop UI (Tauri)
-├── src-tauri/         # Rust shell
-├── mkdsc/             # Python backend (ADB/Scrcpy logic)
-├── bin/               # Bundled backend binaries
+├── frontend/          # Desktop UI (React + Tauri)
+├── src-tauri/         # Rust: app logic and IPC
 ├── downloads/         # ADB/Scrcpy cache
 ├── logs/              # Logs and diagnostics
 ├── config.json        # App settings
-├── tauri_backend.py   # Backend entry point
 └── docs/              # Build notes
 ```
 

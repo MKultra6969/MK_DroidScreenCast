@@ -56,12 +56,11 @@ type FilesPageProps = {
   moveEntry: (source: string, destination: string) => void | Promise<void>;
   readFile: (path: string) => Promise<{ content: string; truncated: boolean; isBinary: boolean }>;
   writeFile: (path: string, content: string) => Promise<boolean> | boolean;
-  uploadFiles: (files: FileList, destination: string) => void | Promise<void>;
   /**
-   * Выбор файлов средствами системы. Есть только в десктопе: там содержимое
-   * `<input type=file>` до бэкенда не доедет, нужны пути.
+   * Выбор файлов средствами системы: содержимое `<input type=file>` до бэкенда
+   * не доедет, ему нужны пути на диске.
    */
-  pickUpload?: (destination: string) => void | Promise<void>;
+  pickUpload: (destination: string) => void | Promise<void>;
   filesPage: number;
   filesPageSize: number;
   filesTotal: number;
@@ -253,7 +252,6 @@ export function FilesPage({
   moveEntry,
   readFile,
   writeFile,
-  uploadFiles,
   pickUpload,
   filesPage,
   filesPageSize,
@@ -281,7 +279,6 @@ export function FilesPage({
   const [captionDraft, setCaptionDraft] = useState('');
   const [captionSaving, setCaptionSaving] = useState(false);
 
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const dragCounter = useRef(0);
 
   const sectionHighlightClass = (sectionId: string) =>
@@ -499,10 +496,6 @@ export function FilesPage({
     event.preventDefault();
     dragCounter.current = 0;
     setDragActive(false);
-    const dropped = event.dataTransfer.files;
-    if (dropped && dropped.length) {
-      void uploadFiles(dropped, currentPath);
-    }
   };
 
   const handleEntryDragStart = (event: DragEvent<HTMLDivElement>, entry: FileEntry) => {
@@ -528,13 +521,8 @@ export function FilesPage({
   const handleFolderDrop = (event: DragEvent<HTMLDivElement>, entry: FileEntry) => {
     event.preventDefault();
     event.stopPropagation();
-    const dropped = event.dataTransfer.files;
     const source = event.dataTransfer.getData(INTERNAL_DRAG_TYPE);
     setDragOverPath(null);
-    if (dropped && dropped.length) {
-      void uploadFiles(dropped, entry.path);
-      return;
-    }
     if (!source || source === entry.path) return;
     const name = basename(source);
     if (!name) return;
@@ -774,7 +762,7 @@ export function FilesPage({
               <button
                 className={primaryButtonClass}
                 type="button"
-                onClick={() => (pickUpload ? void pickUpload(currentPath) : fileInputRef.current?.click())}
+                onClick={() => void pickUpload(currentPath)}
                 disabled={filesBusy}
               >
                 <Upload className="h-3.5 w-3.5" />
@@ -812,19 +800,6 @@ export function FilesPage({
                 </button>
               ))}
             </div>
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              className="hidden"
-              onChange={(event) => {
-                if (event.target.files?.length) {
-                  void uploadFiles(event.target.files, currentPath);
-                  event.target.value = '';
-                }
-              }}
-            />
 
             {filesError && (
               <div className="rounded-[var(--radius-sm)] border border-red-500/40 bg-red-500/10 px-4 py-2 text-xs text-red-200">
@@ -966,7 +941,7 @@ export function FilesPage({
                 <button
                   className={primaryButtonClass}
                   type="button"
-                  onClick={() => (pickUpload ? void pickUpload(currentPath) : fileInputRef.current?.click())}
+                  onClick={() => void pickUpload(currentPath)}
                   disabled={filesBusy}
                 >
                   <Upload className="h-3.5 w-3.5" />

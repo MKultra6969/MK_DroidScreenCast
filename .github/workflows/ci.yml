@@ -6,19 +6,6 @@ on:
   pull_request:
 
 jobs:
-  backend:
-    name: Python tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-          cache: pip
-      - run: pip install -r requirements-dev.txt
-      - run: python -m compileall -q mkdsc tauri_backend.py
-      - run: python -m pytest
-
   frontend:
     name: Frontend typecheck and build
     runs-on: ubuntu-latest
@@ -37,15 +24,6 @@ jobs:
         working-directory: frontend
       - run: npm run build
         working-directory: frontend
-      # The committed bundle in static/ must match the sources, otherwise the
-      # web panel served by `python web_panel.py` shows a stale UI.
-      - name: Verify static/ is up to date
-        run: |
-          if [ -n "$(git status --porcelain static/)" ]; then
-            echo "static/ is out of date -- run 'npm --prefix frontend run build' and commit the result"
-            git status --porcelain static/
-            exit 1
-          fi
 
   rust:
     name: Rust tests and lint
@@ -70,12 +48,11 @@ jobs:
         with:
           workspaces: './src-tauri -> target'
 
-      # tauri.conf.json lists both as bundle resources, and the build script
-      # refuses to run while they are missing. Everything else it lists is
-      # committed; these two are build outputs and gitignored. Empty
-      # directories are enough here — no step reads their contents.
-      - name: Create the gitignored paths the Tauri build script requires
-        run: mkdir -p bin frontend/dist-tauri
+      # tauri.conf.json points the build at the frontend bundle, and the build
+      # script refuses to run while it is missing. It is a build output and
+      # gitignored; an empty directory is enough for the tests.
+      - name: Create the gitignored path the Tauri build script requires
+        run: mkdir -p frontend/dist-tauri
 
       - run: cargo test --manifest-path src-tauri/Cargo.toml
 
