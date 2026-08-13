@@ -18,7 +18,7 @@ use tauri::AppHandle;
 use crate::error::ApiError;
 use crate::{
     bootstrap, config, connection, devices, events, files, i18n, logs, paths, recording, scrcpy,
-    service, tools, updater,
+    screenshots, service, tools, updater,
 };
 
 /// По этой подстроке `POST /api/pair` отличает успех от неудачи.
@@ -571,6 +571,90 @@ pub async fn api_files_upload(
     .await
 }
 
+/// Зеркалит `GET /api/screenshots` — страница галереи.
+///
+/// В каждой записи есть лишнее против REST поле `path` — путь к файлу на
+/// диске. По HTTP картинку отдаёт `GET /api/screenshots/{id}`, а в десктопе
+/// URL брать неоткуда: фронтенд превращает путь в `asset://` через
+/// `convertFileSrc`.
+#[tauri::command]
+pub async fn api_screenshots(
+    app: AppHandle,
+    query: HashMap<String, String>,
+) -> Result<Value, ApiError> {
+    let dir = screenshots_dir(&app)?;
+    screenshots::allow_asset_access(&app, &dir);
+
+    let (page, page_size) = screenshots::paging(&query);
+    screenshots::list(&dir, page, page_size)
+}
+
+/// Зеркалит `POST /api/screenshots/take`.
+#[tauri::command]
+pub async fn api_screenshots_take(
+    app: AppHandle,
+    query: HashMap<String, String>,
+) -> Result<Value, ApiError> {
+    let adb = require_adb(&app)?;
+    let dir = screenshots_dir(&app)?;
+    screenshots::allow_asset_access(&app, &dir);
+
+    let caption = query.get("caption").map_or("", String::as_str);
+    screenshots::take(&adb, &dir, optional(&query, "serial"), caption).await
+}
+
+/// Зеркалит `POST /api/screenshots/{id}/save` — копия в локальную папку.
+///
+/// Нужен потому, что скачивание через blob и `<a download>` внутри WebView
+/// молча ничего не делает: файл кладёт бэкенд.
+#[tauri::command]
+pub async fn api_screenshots_save(
+    app: AppHandle,
+    params: HashMap<String, String>,
+    body: Option<Value>,
+) -> Result<Value, ApiError> {
+    let config = config::load(&app)?;
+    let dir = paths::screenshots_dir(&app, &config);
+    let data = object_or_empty(body);
+    let target =
+        screenshots::default_save_dir(&app, &config, required_str(&data, "destination_dir").as_deref());
+
+    screenshots::save(&dir, param(&params, "id"), &target)
+}
+
+/// Зеркалит `PUT /api/screenshots/{id}/caption`.
+#[tauri::command]
+pub async fn api_screenshots_caption(
+    app: AppHandle,
+    params: HashMap<String, String>,
+    body: Option<Value>,
+) -> Result<Value, ApiError> {
+    let dir = screenshots_dir(&app)?;
+    let data = object_or_empty(body);
+    // Пустая подпись — это стирание подписи, а не отсутствие поля.
+    let caption = data.get("caption").and_then(Value::as_str).unwrap_or_default();
+
+    screenshots::set_caption(&dir, param(&params, "id"), caption)
+}
+
+/// Зеркалит `DELETE /api/screenshots/{id}`.
+#[tauri::command]
+pub async fn api_screenshots_delete(
+    app: AppHandle,
+    params: HashMap<String, String>,
+) -> Result<Value, ApiError> {
+    screenshots::delete(&screenshots_dir(&app)?, param(&params, "id"))
+}
+
+/// Зеркалит `DELETE /api/screenshots` — удаление списком id.
+#[tauri::command]
+pub async fn api_screenshots_delete_many(
+    app: AppHandle,
+    body: Option<Value>,
+) -> Result<Value, ApiError> {
+    screenshots::delete_many(&screenshots_dir(&app)?, &screenshots::ids_of(body))
+}
+
 /// Зеркалит `GET /api/bootstrap/status` — готовность adb и scrcpy.
 ///
 /// Единственная команда, которая ходит обратно в Python: прогресс скачивания
@@ -793,6 +877,11 @@ fn section(config: &Map<String, Value>, name: &str) -> Value {
 /// команду — пустое значение просто ни с чем не совпадёт.
 fn param<'a>(params: &'a HashMap<String, String>, name: &str) -> &'a str {
     params.get(name).map(String::as_str).unwrap_or_default()
+}
+
+/// Каталог скриншотов по текущему конфигу.
+fn screenshots_dir(app: &AppHandle) -> Result<PathBuf, ApiError> {
+    Ok(paths::screenshots_dir(app, &config::load(app)?))
 }
 
 /// Обязательный параметр запроса; пустой или отсутствующий — 400.

@@ -57,6 +57,17 @@ pub fn logs_dir(app: &AppHandle, config: &serde_json::Map<String, serde_json::Va
     }
 }
 
+/// Каталог скриншотов — `get_screenshots_dir` в `mkdsc/paths.py`.
+pub fn screenshots_dir(
+    app: &AppHandle,
+    config: &serde_json::Map<String, serde_json::Value>,
+) -> PathBuf {
+    match downloads_base_dir(config) {
+        Some(base) if base != data_dir(app) => base.join("screenshots"),
+        _ => data_dir(app).join("screenshots"),
+    }
+}
+
 /// Куда складывать скачанное с устройства — `_resolve_download_dir`.
 ///
 /// Обратите внимание на несимметричность с логами и скриншотами: при заданном

@@ -12,7 +12,10 @@ rust-version = "1.85"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+# `protocol-asset` — отдача картинок галереи прямо с диска. Без него в
+# десктопе `<img src>` показывать нечего: URL у файла нет, а data-URL на
+# скриншоты в несколько мегабайт раздувал бы каждый ответ.
+tauri = { version = "2", features = ["protocol-asset"] }
 serde = { version = "1", features = ["derive"] }
 # `preserve_order` обязателен: конфигом владеет Rust, а `config.json` правится
 # руками и через редактор в UI. С дефолтным `BTreeMap` первая же запись

@@ -13,6 +13,7 @@ mod logs;
 mod paths;
 mod recording;
 mod scrcpy;
+mod screenshots;
 mod service;
 mod signal;
 mod tools;
@@ -281,6 +282,12 @@ fn main() {
             api::api_files_write,
             api::api_files_pull,
             api::api_files_upload,
+            api::api_screenshots,
+            api::api_screenshots_take,
+            api::api_screenshots_save,
+            api::api_screenshots_caption,
+            api::api_screenshots_delete,
+            api::api_screenshots_delete_many,
             api::api_presets,
             api::api_presets_save,
             api::api_presets_delete,
