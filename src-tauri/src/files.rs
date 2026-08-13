@@ -342,6 +342,19 @@ async fn resolve_link_dirs(adb: &Path, serial: Option<&str>, files: &mut [FileIn
 // Эндпоинты
 // ---------------------------------------------------------------------------
 
+/// Путь для `ls` — всегда с завершающей косой чертой.
+///
+/// Без неё `ls -la /sdcard` описывает **саму ссылку**, а не то, куда она ведёт:
+/// на Android `/sdcard` — симлинк на `/storage/self/primary`, и файловый
+/// менеджер открывался на списке из одной строки вместо содержимого папки.
+/// Косая черта заставляет `ls` разыменовать ссылку.
+///
+/// Путь для дочерних записей при этом берётся исходный: иначе они получили бы
+/// адреса вида `/sdcard//DCIM`.
+fn list_target(path: &str) -> String {
+    format!("{}/", path.trim_end_matches('/'))
+}
+
 /// Зеркалит `GET /api/files/list`.
 ///
 /// Ошибки: 404 — пути нет, 403 — нет доступа, 400 — прочий отказ `ls`.
@@ -354,7 +367,8 @@ pub async fn list(
     page: usize,
     page_size: usize,
 ) -> Result<Value, ApiError> {
-    let output = run_shell(adb, serial, &["ls", "-la", path], SHELL_TIMEOUT).await?;
+    let target = list_target(path);
+    let output = run_shell(adb, serial, &["ls", "-la", &target], SHELL_TIMEOUT).await?;
     if output.timed_out {
         return Err(ApiError::internal("Operation timed out"));
     }
@@ -398,7 +412,7 @@ pub async fn list(
     // Прошивки без `ls -la` (toybox в урезанной сборке) печатают простой
     // список — разбираем его вторым заходом.
     if files.is_empty() && !output.stdout.trim().is_empty() {
-        let fallback = run_shell(adb, serial, &["ls", "-p", path], SHELL_TIMEOUT).await?;
+        let fallback = run_shell(adb, serial, &["ls", "-p", &target], SHELL_TIMEOUT).await?;
         files = parse_simple_ls_output(&fallback.stdout, path);
     }
 
@@ -873,6 +887,17 @@ drwxrwx--x 2 root root 4096 2026-08-13 20:11 ..\n";
         let dot = parse_simple_ls_output("./\n", "/sdcard");
         assert_eq!(dot.len(), 1);
         assert_eq!(dot[0].name, ".");
+    }
+
+    /// Косая черта в конце — то, что заставляет `ls` открыть симлинк
+    /// `/sdcard`, а не описать его самого.
+    #[test]
+    fn listing_always_dereferences_the_directory() {
+        assert_eq!(list_target("/sdcard"), "/sdcard/");
+        assert_eq!(list_target("/sdcard/"), "/sdcard/");
+        assert_eq!(list_target("/sdcard/DCIM"), "/sdcard/DCIM/");
+        // Корень не должен превратиться в `//`.
+        assert_eq!(list_target("/"), "/");
     }
 
     #[test]

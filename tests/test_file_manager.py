@@ -2,6 +2,7 @@ import pytest
 
 from mkdsc.web.file_manager import (
     _is_protected_path,
+    _list_target,
     _normalize_path,
     _safe_filename,
     _shell_string,
@@ -81,3 +82,12 @@ def test_dot_entries_are_skipped():
     ])
     entries = parse_ls_output(output, "/sdcard")
     assert [entry.name for entry in entries] == ["DCIM"]
+
+
+def test_listing_dereferences_symlinked_directories():
+    """`ls -la /sdcard` describes the symlink itself; the trailing slash opens it."""
+    assert _list_target("/sdcard") == "/sdcard/"
+    assert _list_target("/sdcard/") == "/sdcard/"
+    assert _list_target("/sdcard/DCIM") == "/sdcard/DCIM/"
+    # The root must not turn into "//".
+    assert _list_target("/") == "/"

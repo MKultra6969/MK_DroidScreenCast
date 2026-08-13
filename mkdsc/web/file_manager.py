@@ -179,6 +179,19 @@ async def _run_adb_shell(
     return await run_in_threadpool(subprocess.run, cmd, capture_output=True, timeout=timeout)
 
 
+def _list_target(path: str) -> str:
+    """Путь для ``ls`` — всегда с завершающей косой чертой.
+
+    Без неё ``ls -la /sdcard`` описывает саму ссылку, а не то, куда она ведёт:
+    на Android ``/sdcard`` — симлинк на ``/storage/self/primary``, и файловый
+    менеджер открывался на списке из одной строки вместо содержимого папки.
+
+    Пути дочерних записей строятся из исходного ``path``, иначе они получили бы
+    адреса вида ``/sdcard//DCIM``.
+    """
+    return f"{path.rstrip('/')}/"
+
+
 def parse_ls_output(output: str, base_path: str) -> List[FileInfo]:
     """
     Парсит вывод команды ls -la.
@@ -319,7 +332,8 @@ async def list_directory(
     logger = getattr(request.app.state, "logger", None)
 
     try:
-        result = await _run_adb_shell(adb_path, serial, ["ls", "-la", path], timeout=30)
+        target = _list_target(path)
+        result = await _run_adb_shell(adb_path, serial, ["ls", "-la", target], timeout=30)
         if logger:
             logger.info("files.list path=%s serial=%s code=%s", path, serial or "-", result.returncode)
 
@@ -350,7 +364,7 @@ async def list_directory(
 
         files = parse_ls_output(stdout_text, path)
         if not files and stdout_text.strip():
-            fallback = await _run_adb_shell(adb_path, serial, ["ls", "-p", path], timeout=30)
+            fallback = await _run_adb_shell(adb_path, serial, ["ls", "-p", target], timeout=30)
             fallback_text = _decode_output(fallback.stdout)
             files = parse_simple_ls_output(fallback_text, path)
             if logger:
