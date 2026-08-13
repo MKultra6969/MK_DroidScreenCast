@@ -76,6 +76,8 @@ export type Screenshot = {
   filename: string;
   caption: string;
   created_at: string;
+  /** Путь к файлу на диске. Отдаёт только десктопная сборка — см. screenshotSrc. */
+  path?: string;
 };
 
 export type FileEntry = {

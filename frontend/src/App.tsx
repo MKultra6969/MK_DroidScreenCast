@@ -1936,6 +1936,76 @@ function App() {
     }
   };
 
+  /**
+   * Итог загрузки: счётчик, уведомление и обновление списка.
+   *
+   * Общий хвост для двух путей — multipart в вебе и путей на диске в десктопе.
+   */
+  const finishUpload = async (successCount: number, total: number, destination: string) => {
+    if (successCount) {
+      notifyMessage(
+        'success',
+        formatMessage('notification_files_uploaded', {
+          count: String(successCount),
+          total: String(total)
+        })
+      );
+    }
+    const nextPage = destination === currentPath ? filesPage : 1;
+    await loadFiles(destination, nextPage, filesPageSize);
+  };
+
+  /**
+   * Загрузка по путям на диске — десктопный путь.
+   *
+   * Через IPC содержимое файла не передать, поэтому фронтенд отдаёт Rust путь,
+   * а `adb push` читает файл сам. Пути приходят либо из системного диалога,
+   * либо из события перетаскивания Tauri.
+   */
+  const uploadPaths = async (paths: string[], destination: string) => {
+    if (!paths.length) return;
+    setFilesBusy(true);
+    let successCount = 0;
+    try {
+      for (const path of paths) {
+        const url = withFileSerial(
+          `/api/files/upload?destination=${encodeURIComponent(destination)}`
+        );
+        const response = await apiFetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ source: path })
+        });
+        const data = await readJson<{ success?: boolean; detail?: string }>(response);
+        if (response.ok && data.success) {
+          successCount += 1;
+        } else {
+          const name = path.split(/[\\/]/).pop() || path;
+          notifyMessage('error', fileErrorMessage(data, formatMessage('notification_file_upload_failed', { name })));
+        }
+      }
+      await finishUpload(successCount, paths.length, destination);
+    } catch (error) {
+      console.error('uploadPaths error', error);
+      notify('error', 'notification_upload_failed');
+    } finally {
+      setFilesBusy(false);
+    }
+  };
+
+  /** Системный диалог выбора файлов — кнопка «загрузить» в десктопе. */
+  const pickUpload = async (destination: string) => {
+    try {
+      const { open } = await import('@tauri-apps/plugin-dialog');
+      const selected = await open({ multiple: true });
+      const paths = Array.isArray(selected) ? selected : selected ? [selected] : [];
+      await uploadPaths(paths, destination);
+    } catch (error) {
+      console.error('pickUpload error', error);
+      notify('error', 'notification_upload_failed');
+    }
+  };
+
   const uploadFiles = async (fileList: FileList, destination: string) => {
     if (!fileList.length) return;
     setFilesBusy(true);
@@ -1957,17 +2027,7 @@ function App() {
           notifyMessage('error', formatMessage('notification_file_upload_failed', { name: file.name }));
         }
       }
-      if (successCount) {
-        notifyMessage(
-          'success',
-          formatMessage('notification_files_uploaded', {
-            count: String(successCount),
-            total: String(total)
-          })
-        );
-      }
-      const nextPage = destination === currentPath ? filesPage : 1;
-      await loadFiles(destination, nextPage, filesPageSize);
+      await finishUpload(successCount, total, destination);
     } catch (error) {
       console.error('uploadFiles error', error);
       notify('error', 'notification_upload_failed');
@@ -2246,6 +2306,9 @@ function App() {
                 readFile={readFile}
                 writeFile={writeFile}
                 uploadFiles={uploadFiles}
+                // В вебе остаётся `<input type=file>`: там содержимое уезжает
+                // multipart'ом, и системный диалог не нужен.
+                pickUpload={isTauri() ? pickUpload : undefined}
                 filesPage={filesPage}
                 filesPageSize={filesPageSize}
                 filesTotal={filesTotal}

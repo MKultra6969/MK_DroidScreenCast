@@ -111,6 +111,26 @@ const IPC_ROUTES: IpcRoute[] = [
   // `invoke` нет, и это как раз то, что нужно: оборванная остановка оставила бы
   // запись без индекса.
   { method: 'POST', pattern: '/api/recording/stop', command: 'api_recording_stop' },
+  { method: 'GET', pattern: '/api/files/list', command: 'api_files_list' },
+  { method: 'DELETE', pattern: '/api/files/delete', command: 'api_files_delete' },
+  { method: 'POST', pattern: '/api/files/mkdir', command: 'api_files_mkdir' },
+  { method: 'POST', pattern: '/api/files/move', command: 'api_files_move' },
+  { method: 'GET', pattern: '/api/files/read', command: 'api_files_read' },
+  { method: 'POST', pattern: '/api/files/write', command: 'api_files_write' },
+  { method: 'POST', pattern: '/api/files/pull', command: 'api_files_pull' },
+  // Тело здесь — `{source}` с путём к файлу на диске, а не multipart:
+  // содержимое файла через IPC не передать. Веб-панель шлёт по этому же пути
+  // FormData в Python, и там всё остаётся как было.
+  { method: 'POST', pattern: '/api/files/upload', command: 'api_files_upload' },
+  { method: 'GET', pattern: '/api/screenshots', command: 'api_screenshots' },
+  { method: 'DELETE', pattern: '/api/screenshots', command: 'api_screenshots_delete_many' },
+  { method: 'POST', pattern: '/api/screenshots/take', command: 'api_screenshots_take' },
+  { method: 'DELETE', pattern: '/api/screenshots/{id}', command: 'api_screenshots_delete' },
+  { method: 'POST', pattern: '/api/screenshots/{id}/save', command: 'api_screenshots_save' },
+  { method: 'PUT', pattern: '/api/screenshots/{id}/caption', command: 'api_screenshots_caption' },
+  // `GET /api/screenshots/{id}` намеренно не переехал: он отдаёт png, а не
+  // JSON. В десктопе картинка читается с диска через `convertFileSrc`
+  // (см. `screenshotSrc` в `lib/assets.ts`), в вебе — по этому пути из Python.
 ];
 
 type IpcMatch = {

@@ -17,7 +17,7 @@ import {
   Upload,
   X
 } from 'lucide-react';
-import { apiUrlWithToken } from '../../lib/api';
+import { screenshotSrc } from '../../lib/assets';
 import { confirmAction } from '../../lib/dialogs';
 import { delayStyle } from '../../lib/style';
 import { cn } from '../../utils';
@@ -57,6 +57,11 @@ type FilesPageProps = {
   readFile: (path: string) => Promise<{ content: string; truncated: boolean; isBinary: boolean }>;
   writeFile: (path: string, content: string) => Promise<boolean> | boolean;
   uploadFiles: (files: FileList, destination: string) => void | Promise<void>;
+  /**
+   * Выбор файлов средствами системы. Есть только в десктопе: там содержимое
+   * `<input type=file>` до бэкенда не доедет, нужны пути.
+   */
+  pickUpload?: (destination: string) => void | Promise<void>;
   filesPage: number;
   filesPageSize: number;
   filesTotal: number;
@@ -249,6 +254,7 @@ export function FilesPage({
   readFile,
   writeFile,
   uploadFiles,
+  pickUpload,
   filesPage,
   filesPageSize,
   filesTotal,
@@ -613,7 +619,7 @@ export function FilesPage({
                         onClick={() => openScreenshot(ss)}
                       >
                         <img
-                          src={apiUrlWithToken(`/api/screenshots/${ss.id}`)}
+                          src={screenshotSrc(ss)}
                           alt={ss.caption || ss.filename}
                           className="h-full w-full object-cover"
                         />
@@ -768,7 +774,7 @@ export function FilesPage({
               <button
                 className={primaryButtonClass}
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => (pickUpload ? void pickUpload(currentPath) : fileInputRef.current?.click())}
                 disabled={filesBusy}
               >
                 <Upload className="h-3.5 w-3.5" />
@@ -960,7 +966,7 @@ export function FilesPage({
                 <button
                   className={primaryButtonClass}
                   type="button"
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => (pickUpload ? void pickUpload(currentPath) : fileInputRef.current?.click())}
                   disabled={filesBusy}
                 >
                   <Upload className="h-3.5 w-3.5" />
@@ -1190,7 +1196,7 @@ export function FilesPage({
             <>
               <div className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] p-2">
                 <img
-                  src={apiUrlWithToken(`/api/screenshots/${selectedScreenshot.id}`)}
+                  src={screenshotSrc(selectedScreenshot)}
                   alt={selectedScreenshot.caption || selectedScreenshot.filename}
                   className="max-h-[60vh] w-full object-contain"
                 />
