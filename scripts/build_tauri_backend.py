@@ -1,7 +1,17 @@
+import os
 import platform
 import subprocess
 import sys
 from pathlib import Path
+
+# Файлы данных, которые PyInstaller сам не найдёт: он видит только импорты.
+# Формат `--add-data` — "источник<разделитель>каталог назначения", разделитель
+# зависит от платформы (`;` на Windows, `:` на остальных).
+DATA_FILES = [
+    # Словарь строк веб-панели: `mkdsc/i18n/lexicon_web.py` читает его рядом с
+    # собой. Без этого frozen-бэкенд падает на импорте с FileNotFoundError.
+    ("mkdsc/i18n/lexicon_web.json", "mkdsc/i18n"),
+]
 
 
 def main() -> int:
@@ -12,6 +22,10 @@ def main() -> int:
 
     dist_dir.mkdir(parents=True, exist_ok=True)
     work_dir.mkdir(parents=True, exist_ok=True)
+
+    data_args = []
+    for source, destination in DATA_FILES:
+        data_args.extend(["--add-data", f"{root / source}{os.pathsep}{destination}"])
 
     cmd = [
         sys.executable,
@@ -30,6 +44,7 @@ def main() -> int:
         str(work_dir),
         "--paths",
         str(root),
+        *data_args,
         str(root / "tauri_backend.py"),
     ]
 

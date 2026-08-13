@@ -16,14 +16,7 @@ use serde_json::{Map, Value, json};
 use tauri::AppHandle;
 
 use crate::error::ApiError;
-use crate::{config, devices, events, recording, scrcpy, tools};
-
-/// Языки веб-панели — ключи `LEXICON_WEB` из `mkdsc/i18n/lexicon_web.py`.
-///
-/// Сам словарь (508 строк) остаётся в Python вместе с `GET /api/i18n`; сюда
-/// нужен только список. Чтобы он не разъехался со словарём, есть тест
-/// `languages_match_python_lexicon`.
-const LANGUAGES: [&str; 2] = ["en", "ru"];
+use crate::{config, devices, events, i18n, recording, scrcpy, tools};
 
 /// По этой подстроке `POST /api/pair` отличает успех от неудачи.
 ///
@@ -95,6 +88,18 @@ pub async fn api_config_replace(app: AppHandle, body: Option<Value>) -> Result<V
     let new_config = require_object(body)?;
     let config = config::replace(&app, &new_config)?;
     Ok(json!({"success": true, "config": config}))
+}
+
+/// Зеркалит `GET /api/i18n?lang=xx`.
+///
+/// Отдаёт `{language, strings}`: `strings` — английский словарь, перекрытый
+/// локальным. Незнакомый язык отдаёт английский, а не ошибку.
+///
+/// Параметр не обязателен: без него — `en`, как значение по умолчанию у
+/// FastAPI-обработчика.
+#[tauri::command]
+pub async fn api_i18n(query: HashMap<String, String>) -> Result<Value, ApiError> {
+    Ok(i18n::payload(query.get("lang").map_or("en", String::as_str)))
 }
 
 /// Зеркалит `GET /api/presets` — список пресетов scrcpy.
@@ -499,7 +504,7 @@ fn config_summary(config: &Map<String, Value>) -> Value {
         // Версия берётся из `Cargo.toml`; тест `version_matches_python_constant`
         // в `config.rs` следит, чтобы она не разъехалась с `mkdsc/constants.py`.
         "version": env!("CARGO_PKG_VERSION"),
-        "languages": LANGUAGES,
+        "languages": i18n::LANGUAGES,
     })
 }
 
@@ -586,38 +591,6 @@ pub(crate) fn now_iso() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Список языков обязан совпадать с ключами `LEXICON_WEB`: он уезжает в
-    /// `GET /api/config` и определяет содержимое переключателя языка, а сам
-    /// словарь пока живёт в Python и меняется независимо.
-    #[test]
-    fn languages_match_python_lexicon() {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .expect("src-tauri лежит в корне репозитория")
-            .join("mkdsc")
-            .join("i18n")
-            .join("lexicon_web.py");
-        let source = std::fs::read_to_string(&path).expect("lexicon_web.py на месте");
-
-        // Ключи верхнего уровня — единственные строки с ровно одним отступом,
-        // после которых открывается словарь. Вложенные ключи отбиты глубже, а
-        // их значения — строки, не `{`.
-        let languages: Vec<String> = source
-            .lines()
-            .filter_map(|line| {
-                let rest = line.strip_prefix("    \"")?;
-                let (language, tail) = rest.split_once('"')?;
-                let tail = tail.trim_start().strip_prefix(':')?;
-                tail.trim_start()
-                    .starts_with('{')
-                    .then(|| language.to_string())
-            })
-            .collect();
-
-        assert!(!languages.is_empty(), "разбор lexicon_web.py ничего не нашёл");
-        assert_eq!(languages, LANGUAGES.to_vec());
-    }
 
     /// Таблица маршрутов фронтенда и список в `generate_handler!` обязаны
     /// совпадать.

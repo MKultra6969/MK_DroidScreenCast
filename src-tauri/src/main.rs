@@ -5,6 +5,7 @@ mod config;
 mod devices;
 mod error;
 mod events;
+mod i18n;
 mod paths;
 mod recording;
 mod scrcpy;
@@ -252,6 +253,7 @@ fn main() {
             api::api_config_full,
             api::api_config_update,
             api::api_config_replace,
+            api::api_i18n,
             api::api_presets,
             api::api_presets_save,
             api::api_presets_delete,

@@ -110,6 +110,17 @@ the manifest before committing the new SHA-256 values.
 A scrcpy outside the tested range still starts, but logs a warning and shows it
 in the UI — the flag set is only verified for the range in `mkdsc/tools.py`.
 
+## Backend data files
+
+`npm run tauri:backend:build` freezes the Python backend with PyInstaller,
+which only follows imports — any non-`.py` file the backend reads at runtime
+has to be listed in `DATA_FILES` in `scripts/build_tauri_backend.py`, or the
+frozen binary dies with `FileNotFoundError` while the sources work fine.
+
+Currently bundled: `mkdsc/i18n/lexicon_web.json` — the UI string dictionary,
+read by both `mkdsc/i18n/lexicon_web.py` and (through `include_str!`)
+`src-tauri/src/i18n.rs`.
+
 ## Windows (release build)
 ```bash
 npm run tauri:backend:build
