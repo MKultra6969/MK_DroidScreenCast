@@ -57,6 +57,19 @@ pub fn logs_dir(app: &AppHandle, config: &serde_json::Map<String, serde_json::Va
     }
 }
 
+/// Куда складывать скачанное с устройства — `_resolve_download_dir`.
+///
+/// Обратите внимание на несимметричность с логами и скриншотами: при заданном
+/// `downloads.base_dir` файлы кладутся прямо в него, без подкаталога, а при
+/// незаданном — в `DATA_DIR/downloads`. Так это работает в Python, и менять
+/// нельзя: пользователь ищет файлы там, куда их клал прошлый релиз.
+pub fn download_dir(app: &AppHandle, config: &serde_json::Map<String, serde_json::Value>) -> PathBuf {
+    match downloads_base_dir(config) {
+        Some(base) if base != data_dir(app) => base,
+        _ => data_dir(app).join("downloads"),
+    }
+}
+
 /// `downloads.base_dir` из конфига, если он задан непустой строкой.
 fn downloads_base_dir(config: &serde_json::Map<String, serde_json::Value>) -> Option<PathBuf> {
     let base = config

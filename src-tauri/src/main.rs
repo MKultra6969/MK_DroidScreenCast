@@ -7,6 +7,7 @@ mod connection;
 mod devices;
 mod error;
 mod events;
+mod files;
 mod i18n;
 mod logs;
 mod paths;
@@ -272,6 +273,14 @@ fn main() {
             api::api_bootstrap_status,
             api::api_update_check,
             api::api_logs_export,
+            api::api_files_list,
+            api::api_files_delete,
+            api::api_files_mkdir,
+            api::api_files_move,
+            api::api_files_read,
+            api::api_files_write,
+            api::api_files_pull,
+            api::api_files_upload,
             api::api_presets,
             api::api_presets_save,
             api::api_presets_delete,

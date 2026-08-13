@@ -17,8 +17,8 @@ use tauri::AppHandle;
 
 use crate::error::ApiError;
 use crate::{
-    bootstrap, config, connection, devices, events, i18n, logs, recording, scrcpy, service, tools,
-    updater,
+    bootstrap, config, connection, devices, events, files, i18n, logs, paths, recording, scrcpy,
+    service, tools, updater,
 };
 
 /// По этой подстроке `POST /api/pair` отличает успех от неудачи.
@@ -427,6 +427,150 @@ pub async fn api_scrcpy_launch(app: AppHandle, body: Option<Value>) -> Result<Va
     }))
 }
 
+/// Зеркалит `GET /api/files/list` — содержимое каталога на устройстве.
+#[tauri::command]
+pub async fn api_files_list(
+    app: AppHandle,
+    query: HashMap<String, String>,
+) -> Result<Value, ApiError> {
+    let adb = require_adb(&app)?;
+    let (page, page_size) = files::paging(&query);
+    let path = query.get("path").map_or("/sdcard", String::as_str);
+    files::list(&adb, path, optional(&query, "serial"), page, page_size).await
+}
+
+/// Зеркалит `DELETE /api/files/delete`.
+///
+/// Системные каталоги не удаляются — 400. Проверка идёт по схлопнутому пути,
+/// поэтому `/sdcard/../system` её не обходит.
+#[tauri::command]
+pub async fn api_files_delete(
+    app: AppHandle,
+    query: HashMap<String, String>,
+) -> Result<Value, ApiError> {
+    let adb = require_adb(&app)?;
+    let path = require_query(&query, "path")?;
+    files::delete(&adb, &path, optional(&query, "serial")).await
+}
+
+/// Зеркалит `POST /api/files/mkdir`.
+#[tauri::command]
+pub async fn api_files_mkdir(
+    app: AppHandle,
+    query: HashMap<String, String>,
+    body: Option<Value>,
+) -> Result<Value, ApiError> {
+    let adb = require_adb(&app)?;
+    let data = object_or_empty(body);
+    let Some(path) = required_str(&data, "path") else {
+        return Err(ApiError::new(400, "Path required"));
+    };
+    files::mkdir(&adb, &path, optional(&query, "serial")).await
+}
+
+/// Зеркалит `POST /api/files/move` — перенос и переименование.
+#[tauri::command]
+pub async fn api_files_move(
+    app: AppHandle,
+    query: HashMap<String, String>,
+    body: Option<Value>,
+) -> Result<Value, ApiError> {
+    let adb = require_adb(&app)?;
+    let data = object_or_empty(body);
+    let (Some(source), Some(destination)) = (
+        required_str(&data, "source"),
+        required_str(&data, "destination"),
+    ) else {
+        return Err(ApiError::new(400, "Source and destination required"));
+    };
+    files::move_path(&adb, &source, &destination, optional(&query, "serial")).await
+}
+
+/// Зеркалит `GET /api/files/read` — начало файла для просмотра.
+#[tauri::command]
+pub async fn api_files_read(
+    app: AppHandle,
+    query: HashMap<String, String>,
+) -> Result<Value, ApiError> {
+    let adb = require_adb(&app)?;
+    let path = require_query(&query, "path")?;
+    files::read(
+        &adb,
+        &path,
+        files::read_limit(&query),
+        optional(&query, "serial"),
+    )
+    .await
+}
+
+/// Зеркалит `POST /api/files/write` — сохранение текстового файла.
+#[tauri::command]
+pub async fn api_files_write(
+    app: AppHandle,
+    query: HashMap<String, String>,
+    body: Option<Value>,
+) -> Result<Value, ApiError> {
+    let adb = require_adb(&app)?;
+    let data = object_or_empty(body);
+    let Some(path) = required_str(&data, "path") else {
+        return Err(ApiError::new(400, "Path required"));
+    };
+    // Пустое содержимое — это не «поля нет»: файл законно очищают.
+    let content = data.get("content").and_then(Value::as_str).unwrap_or_default();
+    files::write(&adb, &path, content, optional(&query, "serial")).await
+}
+
+/// Зеркалит `POST /api/files/pull` — файл с устройства в папку загрузок.
+#[tauri::command]
+pub async fn api_files_pull(
+    app: AppHandle,
+    query: HashMap<String, String>,
+    body: Option<Value>,
+) -> Result<Value, ApiError> {
+    let adb = require_adb(&app)?;
+    let data = object_or_empty(body);
+    let Some(path) = required_str(&data, "path") else {
+        return Err(ApiError::new(400, "Path required"));
+    };
+
+    let config = config::load(&app)?;
+    let target = match required_str(&data, "destination_dir") {
+        Some(directory) => paths::expand_user(&directory),
+        None => paths::download_dir(&app, &config),
+    };
+
+    files::pull(&adb, &path, &target, optional(&query, "serial")).await
+}
+
+/// Зеркалит `POST /api/files/upload`, но берёт **путь к файлу на диске**.
+///
+/// Единственное расхождение с REST во всём порту, и оно вынужденное:
+/// HTTP-версия принимает `multipart/form-data`, а через IPC содержимое файла
+/// не передать. В десктопе фронтенд берёт пути через `plugin-dialog` (или из
+/// события перетаскивания) и присылает их сюда; веб-панель продолжает слать
+/// multipart в Python.
+#[tauri::command]
+pub async fn api_files_upload(
+    app: AppHandle,
+    query: HashMap<String, String>,
+    body: Option<Value>,
+) -> Result<Value, ApiError> {
+    let adb = require_adb(&app)?;
+    let data = object_or_empty(body);
+    let Some(source) = required_str(&data, "source") else {
+        return Err(ApiError::new(400, "Source path required"));
+    };
+    let destination = query.get("destination").map_or("/sdcard", String::as_str);
+
+    files::upload(
+        &adb,
+        &paths::expand_user(&source),
+        destination,
+        optional(&query, "serial"),
+    )
+    .await
+}
+
 /// Зеркалит `GET /api/bootstrap/status` — готовность adb и scrcpy.
 ///
 /// Единственная команда, которая ходит обратно в Python: прогресс скачивания
@@ -649,6 +793,16 @@ fn section(config: &Map<String, Value>, name: &str) -> Value {
 /// команду — пустое значение просто ни с чем не совпадёт.
 fn param<'a>(params: &'a HashMap<String, String>, name: &str) -> &'a str {
     params.get(name).map(String::as_str).unwrap_or_default()
+}
+
+/// Обязательный параметр запроса; пустой или отсутствующий — 400.
+///
+/// В FastAPI такой параметр объявлен `Query(...)`, и его отсутствие даёт 422 с
+/// текстом про валидацию — здесь текст понятнее, а код тот же класс ошибки.
+fn require_query(params: &HashMap<String, String>, name: &str) -> Result<String, ApiError> {
+    optional(params, name)
+        .map(str::to_string)
+        .ok_or_else(|| ApiError::new(400, format!("Query parameter '{name}' required")))
 }
 
 /// Необязательный параметр запроса.
