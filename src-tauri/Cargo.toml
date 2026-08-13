@@ -31,7 +31,7 @@ uuid = { version = "1", features = ["v4"] }
 # через `await`, и `std::sync::Mutex` для этого не годится.
 # `io-util` и `rt` — ради `adb pair`: код спаривания пишется в stdin, а вывод
 # вычитывается отдельными задачами.
-tokio = { version = "1", features = ["process", "time", "sync", "io-util", "rt"] }
+tokio = { version = "1", features = ["process", "time", "sync", "io-util", "rt", "fs"] }
 # Для timestamp в формате `datetime.now().isoformat()` — локальное время без
 # таймзоны. Тоже уже есть в дереве зависимостей Tauri.
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
@@ -45,7 +45,14 @@ zip = { version = "4", default-features = false, features = ["deflate"] }
 # Python-бэкенда о готовности инструментов. Крейт уже в дереве (тот же
 # `tauri-plugin-updater`), TLS — rustls, чтобы на Linux не появилась зависимость
 # от системного OpenSSL.
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+# Скачивание инструментов: проверка SHA-256 архива до распаковки и сами
+# распаковщики. Все три уже в дереве (`tauri-plugin-updater` тянет ровно их),
+# новых крейтов установка не добавляет.
+sha2 = "0.10"
+tar = "0.4"
+flate2 = "1"
+futures-util = { version = "0.3", default-features = false }
 
 [target.'cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))'.dependencies]
 tauri-plugin-updater = "2"

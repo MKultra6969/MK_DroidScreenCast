@@ -1828,9 +1828,13 @@ name = "mkdsc-tauri"
 version = "1.0.2"
 dependencies = [
  "chrono",
+ "flate2",
+ "futures-util",
  "reqwest",
  "serde",
  "serde_json",
+ "sha2",
+ "tar",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",

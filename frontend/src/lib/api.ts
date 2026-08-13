@@ -1,10 +1,13 @@
-const envBase = (import.meta.env.VITE_API_BASE || '').replace(/\/$/, '');
-const API_BASE = envBase || '';
-
-const TOKEN_HEADER = 'X-MKDSC-Token';
+/**
+ * Единственная точка выхода фронтенда в бэкенд.
+ *
+ * Бэкенд теперь один — Rust за Tauri IPC. HTTP-слоя нет: путь и метод
+ * превращаются в имя команды по таблице ниже, а результат заворачивается в
+ * настоящий `Response`. Благодаря этому 40+ мест вызова `apiFetch` работают с
+ * ним как с ответом `fetch` — `.ok`, `.status`, `readJson()`, `.headers.get()`.
+ */
 
 type AppWindow = Window & {
-  __MKDSC_TOKEN__?: string;
   __TAURI_INTERNALS__?: unknown;
 };
 
@@ -16,48 +19,6 @@ type AppWindow = Window & {
 export const isTauri = () =>
   typeof window !== 'undefined' && Boolean((window as AppWindow).__TAURI_INTERNALS__);
 
-// In the web panel the backend injects the token into the page it serves.
-let apiToken =
-  typeof window !== 'undefined' ? String((window as AppWindow).__MKDSC_TOKEN__ || '') : '';
-let tokenPromise: Promise<string> | null = null;
-
-export const getApiToken = () => apiToken;
-
-/** In the desktop build the token comes from the Rust launcher over IPC. */
-export const ensureApiToken = async (): Promise<string> => {
-  if (apiToken) return apiToken;
-  if (!isTauri()) return '';
-  if (!tokenPromise) {
-    tokenPromise = (async () => {
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        apiToken = String((await invoke<string>('mkdsc_api_token')) || '');
-      } catch (error) {
-        console.error('api token error', error);
-      }
-      return apiToken;
-    })();
-  }
-  return tokenPromise;
-};
-
-export const apiUrl = (path: string) => `${API_BASE}${path}`;
-
-/** For <img src> and <a href>, where no request headers can be attached. */
-export const apiUrlWithToken = (path: string) => {
-  const url = apiUrl(path);
-  if (!apiToken) return url;
-  const joiner = url.includes('?') ? '&' : '?';
-  return `${url}${joiner}token=${encodeURIComponent(apiToken)}`;
-};
-
-const withAuth = (init: RequestInit): RequestInit => {
-  if (!apiToken) return init;
-  const headers = new Headers(init.headers || {});
-  headers.set(TOKEN_HEADER, apiToken);
-  return { ...init, headers };
-};
-
 type ApiFetchOptions = RequestInit & { timeoutMs?: number };
 
 type IpcRoute = {
@@ -68,12 +29,11 @@ type IpcRoute = {
 };
 
 /**
- * Эндпоинты, уехавшие с HTTP на Tauri IPC.
+ * Таблица маршрутов: путь и метод — имя команды.
  *
- * Команда называется по методу и пути (`GET /api/devices` → `api_devices`),
- * а ответ Rust собирает в ту же форму, что отдаёт FastAPI. Всё, чего в этой
- * таблице нет, роутер не трогает — такие пути молча уходят в `fetch`, и
- * непереехавшие эндпоинты продолжают работать.
+ * Имена достались от REST-эндпоинтов, которыми это было до переноса
+ * (`GET /api/devices` → `api_devices`), и пока такими и остаются: переименовать
+ * их в «нормальные» команды — отдельная работа, которая тронет каждую страницу.
  */
 const IPC_ROUTES: IpcRoute[] = [
   { method: 'GET', pattern: '/api/devices', command: 'api_devices' },
@@ -118,9 +78,8 @@ const IPC_ROUTES: IpcRoute[] = [
   { method: 'GET', pattern: '/api/files/read', command: 'api_files_read' },
   { method: 'POST', pattern: '/api/files/write', command: 'api_files_write' },
   { method: 'POST', pattern: '/api/files/pull', command: 'api_files_pull' },
-  // Тело здесь — `{source}` с путём к файлу на диске, а не multipart:
-  // содержимое файла через IPC не передать. Веб-панель шлёт по этому же пути
-  // FormData в Python, и там всё остаётся как было.
+  // Тело здесь — `{source}` с путём к файлу на диске: содержимое файла через
+  // IPC не передать, поэтому загрузка отдаёт путь, а `adb push` читает файл сам.
   { method: 'POST', pattern: '/api/files/upload', command: 'api_files_upload' },
   { method: 'GET', pattern: '/api/screenshots', command: 'api_screenshots' },
   { method: 'DELETE', pattern: '/api/screenshots', command: 'api_screenshots_delete_many' },
@@ -128,9 +87,6 @@ const IPC_ROUTES: IpcRoute[] = [
   { method: 'DELETE', pattern: '/api/screenshots/{id}', command: 'api_screenshots_delete' },
   { method: 'POST', pattern: '/api/screenshots/{id}/save', command: 'api_screenshots_save' },
   { method: 'PUT', pattern: '/api/screenshots/{id}/caption', command: 'api_screenshots_caption' },
-  // `GET /api/screenshots/{id}` намеренно не переехал: он отдаёт png, а не
-  // JSON. В десктопе картинка читается с диска через `convertFileSrc`
-  // (см. `screenshotSrc` в `lib/assets.ts`), в вебе — по этому пути из Python.
 ];
 
 type IpcMatch = {
@@ -156,8 +112,7 @@ const matchIpcRoute = (method: string, pathname: string): IpcMatch | null => {
       // Пустой сегмент (`//`) — не значение параметра, а битый путь.
       if (!actual) return false;
       // Вызывающий код кодирует сегменты через `encodeURIComponent`;
-      // в команду они должны прийти раскодированными — ровно такими, какими
-      // их видит FastAPI в аргументах обработчика.
+      // в команду они должны прийти раскодированными.
       params[expected.slice(1, -1)] = decodeURIComponent(actual);
       return true;
     });
@@ -170,8 +125,6 @@ const matchIpcRoute = (method: string, pathname: string): IpcMatch | null => {
 
 /** Тело запроса как JSON. Роутер получает его уже разобранным. */
 const parseIpcBody = (body: BodyInit | null | undefined): unknown => {
-  // FormData и Blob (загрузка файлов) поедут своей вехой: у них нет
-  // осмысленного JSON-представления, а команд под них пока нет.
   if (typeof body !== 'string' || !body) return null;
   try {
     return JSON.parse(body);
@@ -186,13 +139,7 @@ const jsonResponse = (payload: unknown, status: number) =>
     headers: { 'content-type': 'application/json' },
   });
 
-/**
- * Выполняет команду и заворачивает результат в настоящий `Response`.
- *
- * Именно это позволяет не трогать 40+ мест в `App.tsx`, которые работают с
- * результатом `apiFetch` как с ответом `fetch`: `.ok`, `.status`,
- * `readJson()`, `.blob()`, `.headers.get()`.
- */
+/** Выполняет команду и заворачивает результат в настоящий `Response`. */
 const invokeIpcRoute = async (
   match: IpcMatch,
   query: Record<string, string>,
@@ -205,7 +152,7 @@ const invokeIpcRoute = async (
   } catch (error) {
     // Rust отдаёт ошибку структурой `{status, detail}`. Разворачиваем её в
     // ответ с тем же статусом и телом `{"detail": ...}` — это та форма,
-    // которую уже разбирают `readJson()` и `fileErrorMessage()`.
+    // которую разбирают `readJson()` и `fileErrorMessage()`.
     const failure = error as { status?: unknown; detail?: unknown } | null;
     const status = typeof failure?.status === 'number' ? failure.status : 500;
     const detail = typeof failure?.detail === 'string' ? failure.detail : String(error);
@@ -214,68 +161,40 @@ const invokeIpcRoute = async (
 };
 
 /**
- * Отдаёт `Response` через IPC, если путь уже переехал, иначе `null` —
- * и вызывающий уходит в `fetch`.
+ * Отправляет запрос по адресу вида `/api/...`.
  *
- * Работает только в десктопной сборке: в браузере веб-панель обязана
- * продолжать ходить по HTTP до конца миграции.
+ * `timeoutMs` больше ни на что не влияет — таймауты задаёт Rust, — но остаётся
+ * в сигнатуре, чтобы не править вызывающий код ради одного удалённого поля.
  */
-const ipcFetch = (path: string, init: ApiFetchOptions): Promise<Response> | null => {
-  if (!isTauri()) return null;
-
+export const apiFetch = (path: string, init: ApiFetchOptions = {}): Promise<Response> => {
+  let url: URL;
   try {
     // Разбор через URL, а не регулярками: нужно отделить `pathname` от
     // `searchParams`, и делать это вручную — верный способ ошибиться на
     // экранировании. База фиктивная, `path` всегда относительный.
-    const url = new URL(path, 'http://mkdsc.invalid');
-    const method = (init.method || 'GET').toUpperCase();
-
-    const match = matchIpcRoute(method, url.pathname);
-    if (!match) return null;
-
-    const query: Record<string, string> = {};
-    // Повторяющиеся ключи схлопываются: списочных параметров в API сейчас нет,
-    // а когда появятся — здесь понадобится массив.
-    url.searchParams.forEach((value, key) => {
-      query[key] = value;
-    });
-
-    return invokeIpcRoute(match, query, parseIpcBody(init.body));
+    url = new URL(path, 'http://mkdsc.invalid');
   } catch {
-    // Разбор пути кинуть может: `new URL` на битом пути, `decodeURIComponent`
-    // на одиночном '%'. Роутер обязан вести себя как `fetch` до него, поэтому
-    // не смогли разобрать — отдаём путь HTTP, а не роняем вызов.
-    return null;
-  }
-};
-
-export const apiFetch = (path: string, init: ApiFetchOptions = {}) => {
-  // `timeoutMs` для IPC не нужен — таймаут задаётся на стороне Rust.
-  const ipc = ipcFetch(path, init);
-  if (ipc) return ipc;
-
-  const { timeoutMs, signal, ...rest } = init;
-  if (!timeoutMs) {
-    return fetch(apiUrl(path), withAuth(init));
+    return Promise.resolve(jsonResponse({ detail: `Malformed request path: ${path}` }, 400));
   }
 
-  const controller = new AbortController();
-  let cleanupAbort = () => {};
-  if (signal) {
-    if (signal.aborted) {
-      controller.abort();
-    } else {
-      const onAbort = () => controller.abort();
-      signal.addEventListener('abort', onAbort, { once: true });
-      cleanupAbort = () => signal.removeEventListener('abort', onAbort);
-    }
+  const method = (init.method || 'GET').toUpperCase();
+  const match = matchIpcRoute(method, url.pathname);
+  if (!match) {
+    // Раньше здесь был запасной путь в `fetch`. Сети больше нет: непрописанный
+    // маршрут — это ошибка сборки, и молчать о ней хуже, чем ответить пятисоткой
+    // с внятным текстом.
+    return Promise.resolve(
+      jsonResponse({ detail: `No IPC route for ${method} ${url.pathname}` }, 500),
+    );
   }
 
-  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
-  return fetch(apiUrl(path), withAuth({ ...rest, signal: controller.signal })).finally(() => {
-    window.clearTimeout(timeoutId);
-    cleanupAbort();
+  const query: Record<string, string> = {};
+  // Повторяющиеся ключи схлопываются: списочных параметров в API нет.
+  url.searchParams.forEach((value, key) => {
+    query[key] = value;
   });
+
+  return invokeIpcRoute(match, query, parseIpcBody(init.body));
 };
 
 export const readJson = async <T = any>(response: Response): Promise<T> => {
@@ -286,15 +205,3 @@ export const readJson = async <T = any>(response: Response): Promise<T> => {
   const text = await response.text();
   return { error: text || `HTTP ${response.status}` } as T;
 };
-
-export const wsUrl = (path: string) => {
-  const query = apiToken ? `?token=${encodeURIComponent(apiToken)}` : '';
-  if (API_BASE) {
-    const wsBase = API_BASE.replace(/^http/, 'ws');
-    return `${wsBase}${path}${query}`;
-  }
-  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-  return `${protocol}://${window.location.host}${path}${query}`;
-};
-
-export { API_BASE };

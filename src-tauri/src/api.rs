@@ -656,12 +656,9 @@ pub async fn api_screenshots_delete_many(
 }
 
 /// Зеркалит `GET /api/bootstrap/status` — готовность adb и scrcpy.
-///
-/// Единственная команда, которая ходит обратно в Python: прогресс скачивания
-/// живёт в памяти качающего процесса, а качает пока он (см. `bootstrap.rs`).
 #[tauri::command]
-pub async fn api_bootstrap_status(app: AppHandle) -> Result<Value, ApiError> {
-    bootstrap::status(&app).await
+pub async fn api_bootstrap_status() -> Result<Value, ApiError> {
+    bootstrap::status()
 }
 
 /// Зеркалит `GET /api/update/check` — последний релиз на GitHub.

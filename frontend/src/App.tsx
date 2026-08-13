@@ -10,7 +10,7 @@ import { AutomationPage } from './features/automation/AutomationPage';
 import { FilesPage } from './features/files/FilesPage';
 import { HomePage } from './features/home/HomePage';
 import { ServiceMenuPage } from './features/service/ServiceMenuPage';
-import { apiFetch, ensureApiToken, isTauri, readJson, wsUrl } from './lib/api';
+import { apiFetch, isTauri, readJson } from './lib/api';
 import { confirmAction } from './lib/dialogs';
 import { DEVICE_STREAM_TIMEOUT_MS, listenDevicesUpdate } from './lib/events';
 import { getPageForSection } from './lib/navigation';
@@ -140,10 +140,6 @@ function App() {
   const [serviceCommands, setServiceCommands] = useState<string[]>([]);
 
   const saveNameRef = useRef<HTMLInputElement>(null);
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectRef = useRef<number | null>(null);
-  const wsCancelledRef = useRef(false);
-  const wsRetryRef = useRef(0);
   const streamTimerRef = useRef<number | null>(null);
   const notificationIdRef = useRef(0);
   const lastRecordingErrorRef = useRef<string | null>(null);
@@ -252,9 +248,6 @@ function App() {
     setAppReady(false);
     setDevicesLoading(true);
     setSavedLoading(true);
-
-    // Every /api call needs the token, so it has to be resolved first.
-    await ensureApiToken();
 
     const maxAttempts = 40;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
@@ -374,14 +367,6 @@ function App() {
     }
   }, [notifyMessage, t]);
 
-  const scheduleReconnect = useCallback((connect: () => void) => {
-    if (wsCancelledRef.current) return;
-    // Exponential backoff instead of a fixed 3s hammer.
-    const delay = Math.min(30000, 1000 * 2 ** wsRetryRef.current);
-    wsRetryRef.current = Math.min(wsRetryRef.current + 1, 5);
-    reconnectRef.current = window.setTimeout(connect, delay);
-  }, []);
-
   const clearStreamTimer = useCallback(() => {
     if (streamTimerRef.current) {
       window.clearTimeout(streamTimerRef.current);
@@ -408,45 +393,12 @@ function App() {
     }, DEVICE_STREAM_TIMEOUT_MS);
   }, [clearStreamTimer]);
 
-  const connectWebSocket = useCallback(() => {
-    if (wsCancelledRef.current) return;
-    try {
-      const ws = new WebSocket(wsUrl('/ws'));
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        wsRetryRef.current = 0;
-        setWsConnected(true);
-      };
-      ws.onclose = () => {
-        setWsConnected(false);
-        scheduleReconnect(connectWebSocket);
-      };
-      ws.onerror = () => setWsConnected(false);
-
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.type === 'devices_update') {
-            setActiveDevices(normalizeDevices(data.devices));
-            setDevicesLoading(false);
-          }
-        } catch (error) {
-          console.error('ws message error', error);
-        }
-      };
-    } catch (error) {
-      console.error('ws connect error', error);
-      setWsConnected(false);
-      scheduleReconnect(connectWebSocket);
-    }
-  }, [scheduleReconnect]);
   useEffect(() => {
     initTheme();
     void initializeApp();
   }, [initTheme, initializeApp]);
 
-  // Поток устройств: в десктопе — события Tauri, в веб-панели — WebSocket.
+  // Поток устройств — события Tauri.
   useEffect(() => {
     if (!appReady) return;
 
@@ -454,56 +406,31 @@ function App() {
     setSavedLoading(true);
     void loadDevices();
 
-    if (isTauri()) {
-      // Отписка приезжает промисом. Если эффект успел размонтироваться раньше,
-      // снимаем её сразу: иначе после нескольких перезагрузок страницы
-      // накопились бы живые обработчики и каждое событие обрабатывалось бы
-      // столько раз, сколько было монтирований. Это та же ловушка, что была с
-      // WebSocket, где onclose ставил таймер уже после cleanup.
-      let cancelled = false;
-      let unlisten: (() => void) | null = null;
+    // Отписка приезжает промисом. Если эффект успел размонтироваться раньше,
+    // снимаем её сразу: иначе после нескольких перезагрузок страницы
+    // накопились бы живые обработчики и каждое событие обрабатывалось бы
+    // столько раз, сколько было монтирований.
+    let cancelled = false;
+    let unlisten: (() => void) | null = null;
 
-      void listenDevicesUpdate((payload) => {
-        setActiveDevices(normalizeDevices(payload.devices));
-        setDevicesLoading(false);
-        markDeviceStreamAlive();
+    void listenDevicesUpdate((payload) => {
+      setActiveDevices(normalizeDevices(payload.devices));
+      setDevicesLoading(false);
+      markDeviceStreamAlive();
+    })
+      .then((stop) => {
+        if (cancelled) stop();
+        else unlisten = stop;
       })
-        .then((stop) => {
-          if (cancelled) stop();
-          else unlisten = stop;
-        })
-        .catch((error) => console.error('device stream error', error));
+      .catch((error) => console.error('device stream error', error));
 
-      return () => {
-        cancelled = true;
-        unlisten?.();
-        clearStreamTimer();
-        setWsConnected(false);
-      };
-    }
-
-    wsCancelledRef.current = false;
-    wsRetryRef.current = 0;
-    connectWebSocket();
     return () => {
-      // Order matters: mark cancelled and detach onclose *before* close(),
-      // otherwise the handler fires afterwards and schedules a reconnect that
-      // nothing will ever clear (two live sockets under StrictMode).
-      wsCancelledRef.current = true;
-      if (reconnectRef.current) {
-        window.clearTimeout(reconnectRef.current);
-        reconnectRef.current = null;
-      }
-      const socket = wsRef.current;
-      if (socket) {
-        socket.onclose = null;
-        socket.onerror = null;
-        socket.onmessage = null;
-        socket.close();
-        wsRef.current = null;
-      }
+      cancelled = true;
+      unlisten?.();
+      clearStreamTimer();
+      setWsConnected(false);
     };
-  }, [appReady, clearStreamTimer, connectWebSocket, loadDevices, markDeviceStreamAlive]);
+  }, [appReady, clearStreamTimer, loadDevices, markDeviceStreamAlive]);
 
   // HTTP polling is only a fallback: while the device stream is up it already
   // pushes every change, and each poll costs another blocking adb call.

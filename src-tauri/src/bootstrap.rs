@@ -1,113 +1,43 @@
 //! Готовность инструментов — `GET /api/bootstrap/status`.
 //!
-//! Единственная команда порта, которая ходит обратно в Python. Причина в том,
-//! что скачивание adb и scrcpy остаётся там до вехи 7, а прогресс живёт в
-//! памяти скачивающего процесса: сколько байт из скольких получено, какой
-//! инструмент качается, какая версия scrcpy и не выходит ли она за
-//! проверенный диапазон. Ответить на это, глядя только на диск, нельзя, а без
-//! ответа первый запуск показывал бы «подготовка» вместо процента все те
-//! несколько минут, что идёт загрузка ~150 МБ.
-//!
-//! Поэтому здесь прокси: спрашиваем бэкенд, а если он ещё не поднялся или
-//! молчит — отвечаем тем, что видно с нашей стороны (оба бинаря на диске —
-//! значит, готово). Веха 7 забирает загрузку в Rust, и прокси уходит вместе с
-//! Python.
-
-use std::sync::OnceLock;
-use std::time::Duration;
+//! Раньше эта команда ходила по HTTP в Python: скачивал инструменты он, и
+//! прогресс жил в его памяти. Теперь скачивает `install.rs`, и статус берётся
+//! прямо оттуда.
 
 use serde_json::{Value, json};
-use tauri::AppHandle;
 
 use crate::error::ApiError;
-use crate::tools;
+use crate::install;
 
-/// Таймаут запроса к бэкенду.
-///
-/// Меньше, чем `timeoutMs: 4000` у фронтенда: интерфейс опрашивает статус в
-/// цикле, и лучше отдать запасной ответ, чем задержать следующий опрос.
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(3);
+/// Зеркалит `GET /api/bootstrap/status` — форма ответа не менялась с тех пор,
+/// как её отдавал Python: интерфейс разбирает `ready`, `error`, `stage`,
+/// `tool`, `downloaded_bytes`, `total_bytes` и предупреждение о версии scrcpy.
+pub fn status() -> Result<Value, ApiError> {
+    let status = install::status();
 
-/// Зеркалит `GET /api/bootstrap/status` — форма ответа та же.
-pub async fn status(app: &AppHandle) -> Result<Value, ApiError> {
-    if let Some(status) = ask_backend().await {
-        return Ok(status);
-    }
-
-    let ready = tools::adb_path(app).is_some() && tools::scrcpy_path(app).is_some();
-    Ok(local_status(ready))
-}
-
-/// Спрашивает бэкенд. `None` — не ответил или ответил не объектом.
-async fn ask_backend() -> Option<Value> {
-    let response = client()
-        .get(format!(
-            "http://127.0.0.1:{}/api/bootstrap/status",
-            crate::BACKEND_PORT
-        ))
-        // Бэкенд требует токен на каждом запросе — тот же, что он получил при
-        // запуске через окружение.
-        .header(crate::TOKEN_HEADER, crate::api_token())
-        .send()
-        .await
-        .ok()?
-        .error_for_status()
-        .ok()?;
-
-    match response.json::<Value>().await {
-        Ok(status @ Value::Object(_)) => Some(status),
-        _ => None,
-    }
-}
-
-/// Ответ по тому, что видно с нашей стороны: оба бинаря на диске — готово.
-///
-/// Прогресса здесь нет и быть не может, поэтому стадия — «стартуем»: пока
-/// бэкенд не отвечает, ничего более точного мы не знаем.
-fn local_status(ready: bool) -> Value {
-    json!({
-        "ready": ready,
-        "error": Value::Null,
-        "stage": if ready { "ready" } else { "starting" },
-        "tool": "",
-        "downloaded_bytes": 0,
-        "total_bytes": 0,
-        "scrcpy_version": "",
-        "scrcpy_version_warning": "",
-    })
-}
-
-/// Общий клиент: статус опрашивается в цикле, и собирать пул соединений на
-/// каждый опрос незачем.
-fn client() -> &'static reqwest::Client {
-    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
-    CLIENT.get_or_init(|| {
-        reqwest::Client::builder()
-            .timeout(REQUEST_TIMEOUT)
-            .build()
-            // Собрать клиента мешает только сломанный системный TLS, а здесь
-            // и TLS-то не нужен — запрос уходит на localhost по http.
-            .unwrap_or_default()
-    })
+    Ok(json!({
+        "ready": status.ready,
+        "error": status.error,
+        "stage": status.stage,
+        "tool": status.tool,
+        "downloaded_bytes": status.downloaded_bytes,
+        "total_bytes": status.total_bytes,
+        // Версия scrcpy вне проверенного диапазона не блокирует запуск, но
+        // пользователь должен знать, почему часть опций может не работать.
+        "scrcpy_version": status.scrcpy_version,
+        "scrcpy_version_warning": status.scrcpy_version_warning,
+    }))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// Запасной ответ обязан иметь все поля: интерфейс читает из него `stage`,
-    /// `tool`, `downloaded_bytes` и `total_bytes` без проверок на наличие.
+    /// Интерфейс читает эти поля без проверок на наличие: недостающее поле
+    /// превратится в `undefined` и уедет в разметку как «undefined».
     #[test]
-    fn local_status_has_every_field_the_ui_reads() {
-        let status = local_status(false);
-        assert_eq!(status["ready"], json!(false));
-        assert_eq!(status["stage"], json!("starting"));
-
-        let ready = local_status(true);
-        assert_eq!(ready["ready"], json!(true));
-        assert_eq!(ready["stage"], json!("ready"));
-        // Без ошибки: `data.error` фронтенд показывает как текст сбоя запуска.
-        assert_eq!(ready["error"], Value::Null);
+    fn status_has_every_field_the_ui_reads() {
+        let payload = status().expect("статус");
 
         for key in [
             "ready",
@@ -119,7 +49,12 @@ mod tests {
             "scrcpy_version",
             "scrcpy_version_warning",
         ] {
-            assert!(status.get(key).is_some(), "поле {key} потерялось");
+            assert!(payload.get(key).is_some(), "поле {key} потерялось");
         }
+
+        // До запуска подготовки — «не готово» и без ошибки: интерфейс покажет
+        // экран загрузки, а не сбой.
+        assert_eq!(payload["ready"], json!(false));
+        assert_eq!(payload["error"], Value::Null);
     }
 }
