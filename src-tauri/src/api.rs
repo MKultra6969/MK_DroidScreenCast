@@ -16,7 +16,7 @@ use serde_json::{Map, Value, json};
 use tauri::AppHandle;
 
 use crate::error::ApiError;
-use crate::{config, devices, events, i18n, recording, scrcpy, service, tools};
+use crate::{config, connection, devices, events, i18n, recording, scrcpy, service, tools};
 
 /// По этой подстроке `POST /api/pair` отличает успех от неудачи.
 ///
@@ -422,6 +422,51 @@ pub async fn api_scrcpy_launch(app: AppHandle, body: Option<Value>) -> Result<Va
         "warning_key": plan.warning_key,
         "failed_settings": failed_settings,
     }))
+}
+
+/// Зеркалит `POST /api/connection/auto-detect`.
+///
+/// Меряет латентность всех подключений и рекомендует лучшее. Отсутствие
+/// устройств — не ошибка, а `{success: false, error}` со статусом 200: именно
+/// эту форму разбирает интерфейс.
+#[tauri::command]
+pub async fn api_connection_auto_detect(app: AppHandle) -> Result<Value, ApiError> {
+    let adb = require_adb(&app)?;
+    connection::auto_detect(&adb).await
+}
+
+/// Зеркалит `POST /api/connection/auto-switch`.
+///
+/// Поднимает при необходимости подключение по Wi-Fi и рекомендует то, что
+/// быстрее. Вызывается перед запуском scrcpy, поэтому каждый вызов adb внутри
+/// ограничен по времени: недоступное устройство не должно вешать запуск.
+#[tauri::command]
+pub async fn api_connection_auto_switch(
+    app: AppHandle,
+    body: Option<Value>,
+) -> Result<Value, ApiError> {
+    let adb = require_adb(&app)?;
+    connection::auto_switch(&adb, &object_or_empty(body)).await
+}
+
+/// Зеркалит `GET /api/connection/metrics` — метрики всех подключённых устройств.
+#[tauri::command]
+pub async fn api_connection_metrics(app: AppHandle) -> Result<Value, ApiError> {
+    let adb = require_adb(&app)?;
+    connection::all_metrics(&adb).await
+}
+
+/// Зеркалит `GET /api/connection/metrics/{serial}` — метрики одного устройства.
+///
+/// Неизвестный серийник ошибкой не считается: замер просто не удастся, и
+/// ответ придёт с `is_available: false`.
+#[tauri::command]
+pub async fn api_connection_metrics_device(
+    app: AppHandle,
+    params: HashMap<String, String>,
+) -> Result<Value, ApiError> {
+    let adb = require_adb(&app)?;
+    Ok(connection::device_metrics(&adb, param(&params, "serial")).await)
 }
 
 /// Зеркалит `GET /api/service/commands` — список предопределённых команд и их

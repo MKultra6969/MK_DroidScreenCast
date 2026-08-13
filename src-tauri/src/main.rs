@@ -2,6 +2,7 @@
 
 mod api;
 mod config;
+mod connection;
 mod devices;
 mod error;
 mod events;
@@ -263,6 +264,10 @@ fn main() {
             api::api_pair,
             api::api_tcpip,
             api::api_adb_restart,
+            api::api_connection_auto_detect,
+            api::api_connection_auto_switch,
+            api::api_connection_metrics,
+            api::api_connection_metrics_device,
             api::api_service_commands,
             api::api_service_run,
             api::api_service_custom,
