@@ -9,6 +9,7 @@ mod i18n;
 mod paths;
 mod recording;
 mod scrcpy;
+mod service;
 mod signal;
 mod tools;
 
@@ -262,6 +263,9 @@ fn main() {
             api::api_pair,
             api::api_tcpip,
             api::api_adb_restart,
+            api::api_service_commands,
+            api::api_service_run,
+            api::api_service_custom,
             api::api_scrcpy_launch,
             api::api_recording_status,
             api::api_recording_start,

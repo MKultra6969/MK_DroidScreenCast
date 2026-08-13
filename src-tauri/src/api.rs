@@ -16,7 +16,7 @@ use serde_json::{Map, Value, json};
 use tauri::AppHandle;
 
 use crate::error::ApiError;
-use crate::{config, devices, events, i18n, recording, scrcpy, tools};
+use crate::{config, devices, events, i18n, recording, scrcpy, service, tools};
 
 /// По этой подстроке `POST /api/pair` отличает успех от неудачи.
 ///
@@ -424,6 +424,59 @@ pub async fn api_scrcpy_launch(app: AppHandle, body: Option<Value>) -> Result<Va
     }))
 }
 
+/// Зеркалит `GET /api/service/commands` — список предопределённых команд и их
+/// описания. В adb не ходит: это статическая таблица.
+#[tauri::command]
+pub async fn api_service_commands() -> Result<Value, ApiError> {
+    Ok(service::command_list())
+}
+
+/// Зеркалит `POST /api/service/{command_name}`.
+///
+/// Неизвестное имя — 404 со списком доступных. Серийник приходит параметром
+/// запроса и не обязателен: без него adb сам выберет единственное устройство.
+///
+/// POST, а не GET, у обоих: GET браузер выполняет «просто так» (префетч,
+/// сторонний скрипт во вкладке), а эндпоинт запускает команду на устройстве.
+#[tauri::command]
+pub async fn api_service_run(
+    app: AppHandle,
+    params: HashMap<String, String>,
+    query: HashMap<String, String>,
+) -> Result<Value, ApiError> {
+    let adb = require_adb(&app)?;
+    service::run_predefined(&adb, param(&params, "command_name"), optional(&query, "serial")).await
+}
+
+/// Зеркалит `POST /api/service/custom` — произвольная команда на устройстве.
+///
+/// Диагностика выполняется сразу; всё, что может изменить устройство, требует
+/// `confirm=true` и отдаётся до подтверждения как 403 с перечнем причин —
+/// интерфейс показывает его в диалоге. Часть команд запрещена совсем (400).
+///
+/// Пустая команда — 400 `Command required`: в Python её отсеивал бы pydantic,
+/// но текст ошибки тогда был бы про «поле body некорректно», а не про суть.
+#[tauri::command]
+pub async fn api_service_custom(app: AppHandle, body: Option<Value>) -> Result<Value, ApiError> {
+    let data = object_or_empty(body);
+    let command = data.get("command").and_then(Value::as_str).unwrap_or_default();
+    let serial = data
+        .get("serial")
+        .and_then(Value::as_str)
+        .filter(|serial| !serial.is_empty());
+    let confirm = data
+        .get("confirm")
+        .and_then(Value::as_bool)
+        .unwrap_or_default();
+
+    // Проверка идёт до поиска adb, как и в Python: на запрещённую команду
+    // пользователь должен увидеть отказ, а не «инструменты ещё готовятся».
+    service::validate_custom_command(command, confirm)?;
+
+    let adb = require_adb(&app)?;
+    service::run_custom(&adb, command, serial).await
+}
+
 /// Зеркалит `GET /api/recording/status`.
 ///
 /// Фронтенд опрашивает его раз в две секунды, поэтому команда не ходит ни в
@@ -516,6 +569,18 @@ fn section(config: &Map<String, Value>, name: &str) -> Value {
 /// команду — пустое значение просто ни с чем не совпадёт.
 fn param<'a>(params: &'a HashMap<String, String>, name: &str) -> &'a str {
     params.get(name).map(String::as_str).unwrap_or_default()
+}
+
+/// Необязательный параметр запроса.
+///
+/// Пустая строка равносильна отсутствию: `?serial=` фронтенд не шлёт, но с
+/// `-s ""` adb не нашёл бы устройство вообще, а `if serial:` в Python такой
+/// параметр пропускает.
+fn optional<'a>(params: &'a HashMap<String, String>, name: &str) -> Option<&'a str> {
+    params
+        .get(name)
+        .map(String::as_str)
+        .filter(|value| !value.is_empty())
 }
 
 /// Тело запроса как объект; иначе 400 с тем же текстом, что у FastAPI.

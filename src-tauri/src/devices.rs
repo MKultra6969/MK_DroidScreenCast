@@ -399,7 +399,10 @@ pub async fn pair(adb: &Path, address: &str, code: &str) -> Result<String, ApiEr
 
 /// Вычитывает трубу в фоне. Ошибки чтения дают пустую строку: полупрочитанный
 /// вывод полезнее отсутствующего.
-fn read_to_string<R>(mut source: R) -> tokio::task::JoinHandle<String>
+///
+/// Виден и модулю `service`: сервисные команды читают трубы так же — ради
+/// вывода, накопленного до таймаута.
+pub(crate) fn read_to_string<R>(mut source: R) -> tokio::task::JoinHandle<String>
 where
     R: tokio::io::AsyncRead + Unpin + Send + 'static,
 {
