@@ -1,18 +1,21 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod api;
+mod bootstrap;
 mod config;
 mod connection;
 mod devices;
 mod error;
 mod events;
 mod i18n;
+mod logs;
 mod paths;
 mod recording;
 mod scrcpy;
 mod service;
 mod signal;
 mod tools;
+mod updater;
 
 use std::io::Write;
 use std::process::{Child, Command, Stdio};
@@ -25,12 +28,22 @@ struct BackendState(Mutex<Option<Child>>);
 
 static API_TOKEN: OnceLock<String> = OnceLock::new();
 
+/// Порт, на котором лаунчер поднимает Python-бэкенд.
+///
+/// Захардкожен намеренно и уходит бэкенду через `MKDSC_PORT`. Единственный, кто
+/// ещё стучится по нему изнутри Rust, — прокси `bootstrap.rs`. Порт исчезнет
+/// вместе с Python на вехе 7.
+pub(crate) const BACKEND_PORT: u16 = 6969;
+
+/// Заголовок с токеном — `TOKEN_HEADER` в `mkdsc/web/security.py`.
+pub(crate) const TOKEN_HEADER: &str = "X-MKDSC-Token";
+
 /// Общий секрет между лаунчером и бэкендом.
 ///
 /// Бэкенд получает его через окружение и требует в каждом запросе, а фронтенд
 /// забирает командой `mkdsc_api_token` — то есть токен никогда не покидает
 /// приложение и посторонняя вкладка браузера его не узнает.
-fn api_token() -> &'static str {
+pub(crate) fn api_token() -> &'static str {
     API_TOKEN.get_or_init(|| {
         std::env::var("MKDSC_API_TOKEN")
             .ok()
@@ -155,7 +168,7 @@ fn spawn_backend(app: &tauri::AppHandle) -> Result<Child, Box<dyn std::error::Er
                 .env("MKDSC_BASE_DIR", base_dir)
                 .env("MKDSC_DATA_DIR", data_dir)
                 .env("MKDSC_HOST", "127.0.0.1")
-                .env("MKDSC_PORT", "6969")
+                .env("MKDSC_PORT", BACKEND_PORT.to_string())
                 .env("MKDSC_AUTO_OPEN", "0")
                 .env("MKDSC_CONFIG_READONLY", "1")
                 .env("MKDSC_API_TOKEN", api_token());
@@ -204,7 +217,7 @@ fn spawn_backend(app: &tauri::AppHandle) -> Result<Child, Box<dyn std::error::Er
             .env("MKDSC_BASE_DIR", base_dir)
             .env("MKDSC_DATA_DIR", data_dir)
             .env("MKDSC_HOST", "127.0.0.1")
-            .env("MKDSC_PORT", "6969")
+            .env("MKDSC_PORT", BACKEND_PORT.to_string())
             .env("MKDSC_AUTO_OPEN", "0")
             .env("MKDSC_CONFIG_READONLY", "1")
             .env("MKDSC_API_TOKEN", api_token());
@@ -256,6 +269,9 @@ fn main() {
             api::api_config_update,
             api::api_config_replace,
             api::api_i18n,
+            api::api_bootstrap_status,
+            api::api_update_check,
+            api::api_logs_export,
             api::api_presets,
             api::api_presets_save,
             api::api_presets_delete,

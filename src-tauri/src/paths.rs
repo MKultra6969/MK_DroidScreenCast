@@ -46,6 +46,17 @@ pub fn recordings_dir(app: &AppHandle, config: &serde_json::Map<String, serde_js
     }
 }
 
+/// Каталог логов — `get_logs_dir` в `mkdsc/paths.py`.
+///
+/// Логи пишет Python, а забирает их отсюда экспорт: разойтись нельзя, иначе
+/// архив уедет пустым.
+pub fn logs_dir(app: &AppHandle, config: &serde_json::Map<String, serde_json::Value>) -> PathBuf {
+    match downloads_base_dir(config) {
+        Some(base) if base != data_dir(app) => base.join("logs"),
+        _ => data_dir(app).join("logs"),
+    }
+}
+
 /// `downloads.base_dir` из конфига, если он задан непустой строкой.
 fn downloads_base_dir(config: &serde_json::Map<String, serde_json::Value>) -> Option<PathBuf> {
     let base = config

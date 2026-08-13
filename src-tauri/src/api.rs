@@ -16,7 +16,10 @@ use serde_json::{Map, Value, json};
 use tauri::AppHandle;
 
 use crate::error::ApiError;
-use crate::{config, connection, devices, events, i18n, recording, scrcpy, service, tools};
+use crate::{
+    bootstrap, config, connection, devices, events, i18n, logs, recording, scrcpy, service, tools,
+    updater,
+};
 
 /// По этой подстроке `POST /api/pair` отличает успех от неудачи.
 ///
@@ -422,6 +425,35 @@ pub async fn api_scrcpy_launch(app: AppHandle, body: Option<Value>) -> Result<Va
         "warning_key": plan.warning_key,
         "failed_settings": failed_settings,
     }))
+}
+
+/// Зеркалит `GET /api/bootstrap/status` — готовность adb и scrcpy.
+///
+/// Единственная команда, которая ходит обратно в Python: прогресс скачивания
+/// живёт в памяти качающего процесса, а качает пока он (см. `bootstrap.rs`).
+#[tauri::command]
+pub async fn api_bootstrap_status(app: AppHandle) -> Result<Value, ApiError> {
+    bootstrap::status(&app).await
+}
+
+/// Зеркалит `GET /api/update/check` — последний релиз на GitHub.
+///
+/// Ставит обновление не это: десктоп обновляется через `tauri-plugin-updater`
+/// из подписанного фида. Отсюда интерфейс берёт описание релиза и ссылку на
+/// страницу — на них он откатывается, когда фид новую версию ещё не видит.
+#[tauri::command]
+pub async fn api_update_check() -> Result<Value, ApiError> {
+    updater::check().await
+}
+
+/// Зеркалит `POST /api/logs/export` — архив с логами в выбранном каталоге.
+///
+/// В архив уезжают логи, `config.json` и версии adb/scrcpy: он собирается для
+/// баг-репорта, и без версий инструментов половина отчётов бесполезна.
+#[tauri::command]
+pub async fn api_logs_export(app: AppHandle, body: Option<Value>) -> Result<Value, ApiError> {
+    let data = object_or_empty(body);
+    logs::export(&app, data.get("directory").and_then(Value::as_str)).await
 }
 
 /// Зеркалит `POST /api/connection/auto-detect`.

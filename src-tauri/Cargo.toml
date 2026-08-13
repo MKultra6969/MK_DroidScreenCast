@@ -32,6 +32,17 @@ tokio = { version = "1", features = ["process", "time", "sync", "io-util", "rt"]
 # Для timestamp в формате `datetime.now().isoformat()` — локальное время без
 # таймзоны. Тоже уже есть в дереве зависимостей Tauri.
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+# `POST /api/logs/export` собирает архив с логами, конфигом и версиями
+# инструментов. Версия «4», а не «2»: ровно эту уже тянет
+# `tauri-plugin-updater`, и вторая копия крейта в дереве не нужна. Из фич —
+# только `deflate` (через `flate2`, который там же): всё остальное потянуло бы
+# новые зависимости ради форматов, которых в архиве не будет.
+zip = { version = "4", default-features = false, features = ["deflate"] }
+# HTTP нужен двум командам: проверке обновлений на GitHub и опросу
+# Python-бэкенда о готовности инструментов. Крейт уже в дереве (тот же
+# `tauri-plugin-updater`), TLS — rustls, чтобы на Linux не появилась зависимость
+# от системного OpenSSL.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
 [target.'cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))'.dependencies]
 tauri-plugin-updater = "2"
