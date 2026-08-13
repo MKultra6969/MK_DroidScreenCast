@@ -521,8 +521,11 @@ pub async fn api_service_run(
     params: HashMap<String, String>,
     query: HashMap<String, String>,
 ) -> Result<Value, ApiError> {
+    // Имя проверяется до поиска adb: на опечатку в пути пользователь должен
+    // получить 404, а не «инструменты ещё готовятся».
+    let command = service::lookup(param(&params, "command_name"))?;
     let adb = require_adb(&app)?;
-    service::run_predefined(&adb, param(&params, "command_name"), optional(&query, "serial")).await
+    service::run_predefined(&adb, &command, optional(&query, "serial")).await
 }
 
 /// Зеркалит `POST /api/service/custom` — произвольная команда на устройстве.

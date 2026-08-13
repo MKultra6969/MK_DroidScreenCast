@@ -214,8 +214,11 @@ pub async fn auto_switch(adb: &Path, payload: &Map<String, Value>) -> Result<Val
         .and_then(Value::as_str)
         .map(str::trim)
         .filter(|serial| !serial.is_empty());
+    // `str(payload.get("port") or "5555").strip() or "5555"`: и отсутствие, и
+    // любое ложное значение (пустая строка, 0, null) дают порт по умолчанию.
     let port = payload
         .get("port")
+        .filter(|port| crate::config::is_truthy(port))
         .map(crate::config::python_str)
         .map(|port| port.trim().to_string())
         .filter(|port| !port.is_empty())

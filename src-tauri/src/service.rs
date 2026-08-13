@@ -118,19 +118,37 @@ pub fn command_list() -> Value {
     })
 }
 
-/// Выполняет предопределённую команду.
+/// Что выполняет предопределённая команда, или 404 с текстом обработчика.
 ///
-/// Неизвестное имя — 404 с тем же текстом, что у FastAPI-обработчика: его
-/// показывает сервисное меню.
-pub async fn run_predefined(adb: &Path, name: &str, serial: Option<&str>) -> Result<Value, ApiError> {
-    let Some((_, commands, max_lines)) = PREDEFINED_COMMANDS
+/// Отдельно от запуска, чтобы неизвестное имя отвечало 404 раньше, чем
+/// «инструменты ещё готовятся»: в Python проверка имени тоже стоит до поиска
+/// adb.
+pub fn lookup(name: &str) -> Result<Predefined, ApiError> {
+    PREDEFINED_COMMANDS
         .iter()
         .find(|(command_name, _, _)| *command_name == name)
-    else {
-        return Err(ApiError::new(404, unknown_command_detail(name)));
-    };
+        .map(|(_, commands, max_lines)| Predefined {
+            commands,
+            max_lines: *max_lines,
+        })
+        .ok_or_else(|| ApiError::new(404, unknown_command_detail(name)))
+}
 
-    Ok(run_all(adb, commands, serial, *max_lines).await?.into_value())
+/// Найденная предопределённая команда.
+pub struct Predefined {
+    commands: &'static [&'static str],
+    max_lines: Option<usize>,
+}
+
+/// Выполняет предопределённую команду.
+pub async fn run_predefined(
+    adb: &Path,
+    command: &Predefined,
+    serial: Option<&str>,
+) -> Result<Value, ApiError> {
+    Ok(run_all(adb, command.commands, serial, command.max_lines)
+        .await?
+        .into_value())
 }
 
 /// Выполняет произвольную команду.
