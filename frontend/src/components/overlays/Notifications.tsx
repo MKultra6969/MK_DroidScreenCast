@@ -1,4 +1,5 @@
-import { AlertCircle, CheckCircle } from 'lucide-react';
+import { memo } from 'react';
+import { CircleAlert, CircleCheck } from 'lucide-react';
 import type { Notification } from '../../types/app';
 import { cn } from '../../utils';
 
@@ -6,27 +7,29 @@ type NotificationsProps = {
   notifications: Notification[];
 };
 
-export function Notifications({ notifications }: NotificationsProps) {
+function NotificationsView({ notifications }: NotificationsProps) {
   if (notifications.length === 0) return null;
 
   return (
-    <div className="fixed right-6 top-6 z-50 flex flex-col gap-3">
+    <div
+      className="pointer-events-none fixed right-6 top-6 z-[1400] flex flex-col items-end gap-2.5"
+      role="status"
+      aria-live="polite"
+    >
       {notifications.map((notification) => (
         <div
           key={notification.id}
           className={cn(
-            'notification',
-            notification.type === 'success' ? 'notification-success' : 'notification-error'
+            'm3-snackbar pointer-events-auto',
+            notification.type === 'success' ? 'm3-snackbar--success' : 'm3-snackbar--error'
           )}
         >
-          {notification.type === 'success' ? (
-            <CheckCircle className="h-5 w-5" />
-          ) : (
-            <AlertCircle className="h-5 w-5" />
-          )}
-          <span>{notification.message}</span>
+          {notification.type === 'success' ? <CircleCheck /> : <CircleAlert />}
+          <span className="min-w-0 flex-1">{notification.message}</span>
         </div>
       ))}
     </div>
   );
 }
+
+export const Notifications = memo(NotificationsView);

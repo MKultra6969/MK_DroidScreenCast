@@ -151,15 +151,11 @@ const PaginationBar = ({
 
   const canPrev = safePage > 1;
   const canNext = safePage < safeTotalPages;
-  const buttonClass = cn(
-    'inline-flex items-center gap-2 rounded-full border border-[var(--md-sys-color-outline-variant)] px-3 py-1 text-xs font-semibold',
-    'bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] shadow-[var(--shadow-1)]',
-    'transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)] disabled:opacity-50'
-  );
+  const buttonClass = 'm3-btn m3-state m3-btn--outlined m3-btn--xs';
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-sm)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-3 py-2 text-xs">
-      <span className="text-[var(--md-sys-color-on-surface-variant)]">{summary}</span>
+    <div className="m3-row text-xs">
+      <span className="text-on-surface-variant">{summary}</span>
       <div className="flex flex-wrap items-center gap-2">
         <button
           className={buttonClass}
@@ -170,10 +166,10 @@ const PaginationBar = ({
           <ChevronLeft className="h-3.5 w-3.5" />
           {labels.prev}
         </button>
-        <label className="flex items-center gap-2 text-xs text-[var(--md-sys-color-on-surface-variant)]">
+        <label className="flex items-center gap-2 m3-body-small m3-on-variant">
           {labels.page}
           <input
-            className="w-16 rounded-full border border-[var(--md-sys-color-outline-variant)] bg-transparent px-2 py-1 text-center text-xs"
+            className="m3-field m3-field--sm w-16 text-center"
             type="number"
             min={1}
             max={safeTotalPages}
@@ -200,10 +196,10 @@ const PaginationBar = ({
           <ChevronRight className="h-3.5 w-3.5" />
         </button>
       </div>
-      <label className="flex items-center gap-2 text-xs text-[var(--md-sys-color-on-surface-variant)]">
+      <label className="flex items-center gap-2 m3-body-small m3-on-variant">
         {labels.perPage}
         <select
-          className="rounded-full border border-[var(--md-sys-color-outline-variant)] bg-transparent px-2 py-1 text-xs"
+          className="m3-field m3-select m3-field--sm w-auto"
           value={pageSize}
           disabled={disabled}
           onChange={(event) => onPageSizeChange(Number(event.target.value))}
@@ -282,17 +278,10 @@ export function FilesPage({
   const dragCounter = useRef(0);
 
   const sectionHighlightClass = (sectionId: string) =>
-    activeSection === sectionId
-      ? 'ring-2 ring-[var(--md-sys-color-primary)] ring-offset-2 ring-offset-[var(--md-sys-color-background)]'
-      : '';
-  const sectionToggleClassName = cn(
-    'inline-flex items-center justify-center rounded-full border border-[var(--md-sys-color-outline-variant)] p-1.5',
-    'bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface-variant)]',
-    'shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]',
-    'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-outline)]'
-  );
+    activeSection === sectionId ? 'm3-panel--active' : '';
+  const sectionToggleClassName = 'm3-icon-btn m3-state m3-icon-btn--sm m3-icon-btn--outlined';
   const sectionToggleIconClass = (collapsed: boolean) =>
-    cn('h-4 w-4 transition-transform', collapsed ? '-rotate-90' : 'rotate-0');
+    cn('m3-panel__toggle-icon', collapsed && 'm3-panel__toggle-icon--collapsed');
   const downloadLabel = t('screenshot_download') || 'Download';
   const deleteLabel = t('screenshot_delete') || 'Delete';
   const captionLabel = t('screenshot_caption_label') || 'Caption';
@@ -312,22 +301,9 @@ export function FilesPage({
     selectedScreenshot && captionDraft.trim() !== (selectedScreenshot.caption || '')
   );
 
-  const toolbarButtonClass = cn(
-    'inline-flex items-center gap-2 rounded-full border border-[var(--md-sys-color-outline-variant)]',
-    'bg-[var(--md-sys-color-surface-container)] px-3 py-1.5 text-xs font-semibold',
-    'shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]',
-    'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-outline)]'
-  );
-  const primaryButtonClass = cn(
-    'inline-flex items-center gap-2 rounded-full bg-[var(--md-sys-color-primary)] px-3 py-1.5 text-xs font-semibold',
-    'text-[var(--md-sys-color-on-primary)] shadow-[var(--shadow-1)] transition hover:-translate-y-0.5',
-    'hover:shadow-[var(--shadow-2)] disabled:opacity-60'
-  );
-  const actionButtonClass = cn(
-    'inline-flex h-7 w-7 items-center justify-center rounded-full border border-transparent',
-    'text-[var(--md-sys-color-on-surface-variant)] transition hover:border-[var(--md-sys-color-outline-variant)]',
-    'hover:bg-[var(--md-sys-color-surface-container-high)]'
-  );
+  const toolbarButtonClass = 'm3-btn m3-state m3-btn--elevated m3-btn--xs';
+  const primaryButtonClass = 'm3-btn m3-state m3-btn--filled m3-btn--xs';
+  const actionButtonClass = 'm3-icon-btn m3-state m3-icon-btn--sm';
 
   const breadcrumbs = useMemo(() => {
     const segments = currentPath.split('/').filter(Boolean);
@@ -536,16 +512,15 @@ export function FilesPage({
       <article
         id="gallery"
         className={cn(
-          'reveal flex flex-col gap-3 rounded-[var(--radius-lg)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] shadow-[var(--shadow-1)]',
-          'transition duration-200 ease-out hover:-translate-y-1 hover:shadow-[var(--shadow-2)] hover:border-[var(--accent-border)]',
+          'm3-enter m3-panel',
           sectionHighlightClass('gallery')
         )}
         style={delayStyle(180)}
       >
-        <div className="flex flex-wrap items-center justify-between gap-3 px-6 pb-4 pt-6 text-[var(--md-sys-color-primary)]">
+        <div className="m3-panel__header">
           <div className="flex items-center gap-3">
-            <Monitor className="h-7 w-7 rounded-[16px] bg-[var(--md-sys-color-primary-container)] p-1.5 text-[var(--md-sys-color-on-primary-container)]" />
-            <h2 className="font-display text-lg font-semibold">
+            <Monitor className="m3-token" />
+            <h2 className="m3-panel__title">
               {t('section_gallery') || 'Screenshots'}
             </h2>
           </div>
@@ -559,13 +534,10 @@ export function FilesPage({
           </button>
         </div>
         {!isSectionCollapsed('gallery') && (
-          <div className="flex flex-col gap-4 px-6 pb-6">
+          <div className="m3-panel__body">
             <div className="flex flex-wrap items-center gap-3">
               <button
-                className={cn(
-                  'inline-flex items-center gap-2 rounded-full bg-[var(--md-sys-color-primary)] px-4 py-2 text-sm font-semibold text-[var(--md-sys-color-on-primary)]',
-                  'shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]'
-                )}
+                className="m3-btn m3-state m3-btn--filled m3-btn--sm"
                 type="button"
                 onClick={() => void handleTakeScreenshot()}
                 disabled={takingScreenshot}
@@ -574,17 +546,14 @@ export function FilesPage({
                 {takingScreenshot ? t('files_taking') : t('files_take_screenshot')}
               </button>
               <input
-                className="min-w-[200px] flex-1 rounded-full border border-[var(--md-sys-color-outline-variant)] bg-transparent px-4 py-2 text-sm"
+                className="m3-field min-w-[200px] flex-1"
                 type="text"
                 value={screenshotCaption}
                 onChange={(event) => setScreenshotCaption(event.target.value)}
                 placeholder={captionPlaceholder}
               />
               <button
-                className={cn(
-                  'inline-flex items-center gap-2 rounded-full border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-4 py-2 text-sm font-semibold',
-                  'shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]'
-                )}
+                className="m3-btn m3-state m3-btn--elevated m3-btn--sm"
                 type="button"
                 onClick={() => void loadScreenshots()}
                 disabled={screenshotsLoading}
@@ -599,7 +568,7 @@ export function FilesPage({
                   {screenshots.map((ss) => (
                     <div
                       key={ss.id}
-                      className="group relative aspect-video overflow-hidden rounded-[var(--radius-sm)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] transition hover:border-[var(--accent-border)]"
+                      className="group relative aspect-video overflow-hidden rounded-m3md bg-surface-container ring-1 ring-outline-variant transition hover:ring-2 hover:ring-primary"
                     >
                       <button
                         type="button"
@@ -610,6 +579,12 @@ export function FilesPage({
                           src={screenshotSrc(ss)}
                           alt={ss.caption || ss.filename}
                           className="h-full w-full object-cover"
+                          /* Плитки грузятся по мере прокрутки: скриншот весит
+                             мегабайты, и страница из сорока штук иначе
+                             декодировала бы их все разом. */
+                          loading="lazy"
+                          decoding="async"
+                          draggable={false}
                         />
                       </button>
                       <div className="pointer-events-none absolute inset-0 flex items-end bg-gradient-to-t from-black/60 via-black/20 to-transparent p-2">
@@ -617,7 +592,7 @@ export function FilesPage({
                           <p className="truncate text-xs text-white">{ss.caption || ss.filename}</p>
                           <div className="pointer-events-auto flex items-center gap-2 opacity-0 transition group-hover:opacity-100">
                             <a
-                              className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white transition hover:bg-black/70"
+                              className="m3-icon-btn m3-state m3-icon-btn--sm bg-black/55 text-white"
                               href="#"
                               title={downloadLabel}
                               aria-label={downloadLabel}
@@ -630,7 +605,7 @@ export function FilesPage({
                               <Download className="h-4 w-4" />
                             </a>
                             <button
-                              className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white transition hover:bg-black/70 disabled:opacity-50"
+                              className="m3-icon-btn m3-state m3-icon-btn--sm bg-black/55 text-white"
                               type="button"
                               onClick={(event) => {
                                 event.stopPropagation();
@@ -661,7 +636,7 @@ export function FilesPage({
                 />
               </div>
             ) : (
-              <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">
+              <p className="m3-body-medium m3-on-variant">
                 {t('files_no_screenshots')}
               </p>
             )}
@@ -672,16 +647,15 @@ export function FilesPage({
       <article
         id="file-manager"
         className={cn(
-          'reveal flex flex-col gap-3 rounded-[var(--radius-lg)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] shadow-[var(--shadow-1)]',
-          'transition duration-200 ease-out hover:-translate-y-1 hover:shadow-[var(--shadow-2)] hover:border-[var(--accent-border)]',
+          'm3-enter m3-panel',
           sectionHighlightClass('file-manager')
         )}
         style={delayStyle(220)}
       >
-        <div className="flex flex-wrap items-center justify-between gap-3 px-6 pb-4 pt-6 text-[var(--md-sys-color-primary)]">
+        <div className="m3-panel__header">
           <div className="flex items-center gap-3">
-            <FolderOpen className="h-7 w-7 rounded-[16px] bg-[var(--md-sys-color-primary-container)] p-1.5 text-[var(--md-sys-color-on-primary-container)]" />
-            <h2 className="font-display text-lg font-semibold">
+            <FolderOpen className="m3-token" />
+            <h2 className="m3-panel__title">
               {t('section_file_manager') || 'File Manager'}
             </h2>
           </div>
@@ -695,51 +669,33 @@ export function FilesPage({
           </button>
         </div>
         {!isSectionCollapsed('file-manager') && (
-          <div className="flex flex-col gap-4 px-6 pb-6">
+          <div className="m3-panel__body">
+            {/*
+              Панель в две строки, а не в одну.
+              Раньше десять элементов стояли подряд: адрес, переходы, действия
+              и ещё раз текущий путь в конце. При обычной ширине окна хвост
+              уезжал за край секции, а глазу было не за что зацепиться — всё
+              выглядело одинаково важным. Теперь сверху адрес и навигация,
+              снизу — быстрые папки и действия над содержимым.
+            */}
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                className={toolbarButtonClass}
-                type="button"
-                onClick={() => navigateToDir('/sdcard')}
-              >
-                /sdcard
+              <input
+                className="m3-field m3-field--sm min-w-[180px] flex-1"
+                type="text"
+                value={pathDraft}
+                onChange={(event) => setPathDraft(event.target.value)}
+                placeholder="/sdcard"
+                aria-label={t('files_go')}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    handlePathSubmit();
+                  }
+                }}
+              />
+              <button className={primaryButtonClass} type="button" onClick={handlePathSubmit}>
+                <ArrowRight className="h-3.5 w-3.5" />
+                {t('files_go')}
               </button>
-              <button
-                className={toolbarButtonClass}
-                type="button"
-                onClick={() => navigateToDir('/sdcard/DCIM')}
-              >
-                DCIM
-              </button>
-              <button
-                className={toolbarButtonClass}
-                type="button"
-                onClick={() => navigateToDir('/sdcard/Download')}
-              >
-                Download
-              </button>
-              <div className="flex flex-1 items-center gap-2 min-w-[200px]">
-                <input
-                  className="w-full rounded-full border border-[var(--md-sys-color-outline-variant)] bg-transparent px-3 py-1.5 text-xs"
-                  type="text"
-                  value={pathDraft}
-                  onChange={(event) => setPathDraft(event.target.value)}
-                  placeholder="/sdcard"
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      handlePathSubmit();
-                    }
-                  }}
-                />
-                <button
-                  className={toolbarButtonClass}
-                  type="button"
-                  onClick={handlePathSubmit}
-                >
-                  <ArrowRight className="h-3.5 w-3.5" />
-                  {t('files_go')}
-                </button>
-              </div>
               <button
                 className={toolbarButtonClass}
                 type="button"
@@ -759,15 +715,23 @@ export function FilesPage({
                 <RefreshCw className={cn('h-3.5 w-3.5', filesLoading && 'animate-spin')} />
                 {t('files_refresh')}
               </button>
-              <button
-                className={primaryButtonClass}
-                type="button"
-                onClick={() => void pickUpload(currentPath)}
-                disabled={filesBusy}
-              >
-                <Upload className="h-3.5 w-3.5" />
-                {t('files_upload')}
-              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {['/sdcard', '/sdcard/DCIM', '/sdcard/Download'].map((shortcut) => (
+                <button
+                  key={shortcut}
+                  className={cn(
+                    'm3-chip m3-state m3-chip--mono',
+                    currentPath === shortcut && 'm3-chip--selected'
+                  )}
+                  type="button"
+                  onClick={() => navigateToDir(shortcut)}
+                >
+                  {shortcut === '/sdcard' ? shortcut : basename(shortcut)}
+                </button>
+              ))}
+              <span className="flex-1" />
               <button
                 className={toolbarButtonClass}
                 type="button"
@@ -777,12 +741,18 @@ export function FilesPage({
                 <FolderPlus className="h-3.5 w-3.5" />
                 {t('files_new_folder')}
               </button>
-              <span className="ml-auto text-xs text-[var(--md-sys-color-on-surface-variant)]">
-                {currentPath}
-              </span>
+              <button
+                className={primaryButtonClass}
+                type="button"
+                onClick={() => void pickUpload(currentPath)}
+                disabled={filesBusy}
+              >
+                <Upload className="h-3.5 w-3.5" />
+                {t('files_upload')}
+              </button>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-3 py-2 text-xs">
+            <div className="m3-row justify-start text-xs">
               {breadcrumbs.map((crumb, index) => (
                 <button
                   key={crumb.path}
@@ -790,8 +760,8 @@ export function FilesPage({
                   className={cn(
                     'rounded-full px-2 py-1 transition',
                     crumb.path === currentPath
-                      ? 'bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)]'
-                      : 'text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)]'
+                      ? 'bg-primary-container text-on-primary-container'
+                      : 'text-on-surface-variant hover:bg-surface-high'
                   )}
                   onClick={() => navigateToDir(crumb.path)}
                   disabled={crumb.path === currentPath}
@@ -802,37 +772,37 @@ export function FilesPage({
             </div>
 
             {filesError && (
-              <div className="rounded-[var(--radius-sm)] border border-red-500/40 bg-red-500/10 px-4 py-2 text-xs text-red-200">
+              <div className="rounded-m3md bg-error-container px-4 py-2 text-xs text-on-error-container">
                 {filesError}
               </div>
             )}
 
             {filesLoading ? (
               <div className="flex items-center justify-center py-8">
-                <div className="loading-spinner" />
+                <div className="m3-spinner" />
               </div>
             ) : files.length > 0 ? (
               <div className="flex flex-col gap-3">
                 <div
-                  className="relative flex flex-col gap-1 rounded-[var(--radius-sm)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] overflow-hidden"
+                  className="relative flex flex-col gap-1 overflow-hidden m3-tray p-0"
                   onDragEnter={handleDragEnter}
                   onDragLeave={handleDragLeave}
                   onDragOver={handleDragOver}
                   onDrop={handleDrop}
                 >
                   {dragActive && (
-                    <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center border-2 border-dashed border-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-primary-container)]/60 text-sm font-semibold text-[var(--md-sys-color-on-primary-container)]">
+                    <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-m3lg border-2 border-dashed border-primary bg-primary-container/70 text-sm font-semibold text-on-primary-container">
                       {t('files_drop_hint')}
                     </div>
                   )}
                   {currentPath !== '/' && (
                     <div className="flex items-center gap-3 px-4 py-2 text-sm">
                       <button
-                        className="flex items-center gap-3 text-left hover:text-[var(--md-sys-color-primary)]"
+                        className="flex items-center gap-3 text-left hover:text-primary"
                         type="button"
                         onClick={() => navigateToDir(parentPath)}
                       >
-                        <Folder className="h-4 w-4 text-[var(--md-sys-color-primary)]" />
+                        <Folder className="h-4 w-4 text-primary" />
                         <span>..</span>
                       </button>
                     </div>
@@ -843,9 +813,9 @@ export function FilesPage({
                       <div
                         key={file.path}
                         className={cn(
-                          'group flex items-center gap-3 px-4 py-2 text-sm transition',
-                          'hover:bg-[var(--md-sys-color-surface-container-high)]',
-                          isDropTarget && 'ring-2 ring-[var(--md-sys-color-primary)]'
+                          'group m3-cv-line flex items-center gap-3 rounded-m3sm px-4 py-2 text-sm',
+                          'transition-colors duration-short hover:bg-surface-high',
+                          isDropTarget && 'ring-2 ring-inset ring-primary'
                         )}
                         draggable
                         onDragStart={(event) => handleEntryDragStart(event, file)}
@@ -856,23 +826,23 @@ export function FilesPage({
                         <button
                           className={cn(
                             'flex min-w-0 flex-1 items-center gap-3 text-left',
-                            file.is_dir && 'hover:text-[var(--md-sys-color-primary)]'
+                            file.is_dir && 'hover:text-primary'
                           )}
                           type="button"
                           onClick={() => file.is_dir && navigateToDir(file.path)}
                           disabled={!file.is_dir}
                         >
                           {file.is_dir ? (
-                            <Folder className="h-4 w-4 text-[var(--md-sys-color-primary)]" />
+                            <Folder className="h-4 w-4 text-primary" />
                           ) : (
-                            <FileText className="h-4 w-4 text-[var(--md-sys-color-on-surface-variant)]" />
+                            <FileText className="h-4 w-4 text-on-surface-variant" />
                           )}
                           <span className="truncate">{file.name}</span>
                         </button>
-                        <span className="hidden text-xs text-[var(--md-sys-color-on-surface-variant)] sm:block">
+                        <span className="hidden m3-body-small m3-on-variant sm:block">
                           {file.is_dir ? '-' : formatBytes(file.size)}
                         </span>
-                        <span className="hidden text-xs text-[var(--md-sys-color-on-surface-variant)] md:block">
+                        <span className="hidden m3-body-small m3-on-variant md:block">
                           {file.date || '-'}
                         </span>
                         <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
@@ -931,7 +901,7 @@ export function FilesPage({
               </div>
             ) : (
               <div
-                className="flex flex-col items-center justify-center gap-3 rounded-[var(--radius-sm)] border border-dashed border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-6 py-8 text-sm text-[var(--md-sys-color-on-surface-variant)]"
+                className="m3-empty"
                 onDragEnter={handleDragEnter}
                 onDragLeave={handleDragLeave}
                 onDragOver={handleDragOver}
@@ -955,7 +925,7 @@ export function FilesPage({
 
       <div
         className={cn(
-          'modal-overlay fixed inset-0 z-[1200] flex items-center justify-center p-5 transition-opacity',
+          'm3-scrim z-[1200] flex items-center justify-center p-5 transition-opacity',
           newFolderOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none invisible opacity-0'
         )}
         aria-hidden={!newFolderOpen}
@@ -966,28 +936,28 @@ export function FilesPage({
         }}
       >
         <div
-          className="relative flex w-full max-w-[480px] flex-col gap-4 rounded-[var(--radius-lg)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] p-6 shadow-[var(--shadow-3)]"
+          className="m3-dialog m3-dialog--enter relative max-w-[480px]"
           role="dialog"
           aria-modal="true"
           aria-labelledby="newFolderTitle"
         >
           <button
-            className="absolute right-4 top-4 text-[var(--md-sys-color-on-surface-variant)]"
+            className="m3-icon-btn m3-state m3-icon-btn--sm absolute right-4 top-4"
             onClick={() => setNewFolderOpen(false)}
             aria-label={t('files_close')}
           >
             <X className="h-5 w-5" />
           </button>
-          <div className="flex items-center gap-3 text-[var(--md-sys-color-primary)]">
-            <FolderPlus className="h-6 w-6 rounded-[14px] bg-[var(--md-sys-color-primary-container)] p-2 text-[var(--md-sys-color-on-primary-container)]" />
-            <h2 id="newFolderTitle" className="font-display text-lg font-semibold">
+          <div className="flex items-center gap-3 text-primary">
+            <FolderPlus className="m3-token m3-token--sm" />
+            <h2 id="newFolderTitle" className="m3-panel__title">
               {t('files_new_folder')}
             </h2>
           </div>
           <label className="flex flex-col gap-2 text-sm">
-            <span className="text-[var(--md-sys-color-on-surface-variant)]">{t('files_folder_name')}</span>
+            <span className="text-on-surface-variant">{t('files_folder_name')}</span>
             <input
-              className="w-full rounded-[var(--radius-md)] border border-[var(--md-sys-color-outline-variant)] bg-transparent px-3 py-2 text-sm"
+              className="m3-field"
               type="text"
               value={newFolderName}
               onChange={(event) => setNewFolderName(event.target.value)}
@@ -1011,7 +981,7 @@ export function FilesPage({
 
       <div
         className={cn(
-          'modal-overlay fixed inset-0 z-[1200] flex items-center justify-center p-5 transition-opacity',
+          'm3-scrim z-[1200] flex items-center justify-center p-5 transition-opacity',
           renameTarget ? 'pointer-events-auto opacity-100' : 'pointer-events-none invisible opacity-0'
         )}
         aria-hidden={!renameTarget}
@@ -1022,28 +992,28 @@ export function FilesPage({
         }}
       >
         <div
-          className="relative flex w-full max-w-[480px] flex-col gap-4 rounded-[var(--radius-lg)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] p-6 shadow-[var(--shadow-3)]"
+          className="m3-dialog m3-dialog--enter relative max-w-[480px]"
           role="dialog"
           aria-modal="true"
           aria-labelledby="renameTitle"
         >
           <button
-            className="absolute right-4 top-4 text-[var(--md-sys-color-on-surface-variant)]"
+            className="m3-icon-btn m3-state m3-icon-btn--sm absolute right-4 top-4"
             onClick={() => setRenameTarget(null)}
             aria-label={t('files_close')}
           >
             <X className="h-5 w-5" />
           </button>
-          <div className="flex items-center gap-3 text-[var(--md-sys-color-primary)]">
-            <Pencil className="h-6 w-6 rounded-[14px] bg-[var(--md-sys-color-primary-container)] p-2 text-[var(--md-sys-color-on-primary-container)]" />
-            <h2 id="renameTitle" className="font-display text-lg font-semibold">
+          <div className="flex items-center gap-3 text-primary">
+            <Pencil className="m3-token m3-token--sm" />
+            <h2 id="renameTitle" className="m3-panel__title">
               {t('files_rename')}
             </h2>
           </div>
           <label className="flex flex-col gap-2 text-sm">
-            <span className="text-[var(--md-sys-color-on-surface-variant)]">{t('files_new_name')}</span>
+            <span className="text-on-surface-variant">{t('files_new_name')}</span>
             <input
-              className="w-full rounded-[var(--radius-md)] border border-[var(--md-sys-color-outline-variant)] bg-transparent px-3 py-2 text-sm"
+              className="m3-field"
               type="text"
               value={renameValue}
               onChange={(event) => setRenameValue(event.target.value)}
@@ -1066,7 +1036,7 @@ export function FilesPage({
 
       <div
         className={cn(
-          'modal-overlay fixed inset-0 z-[1200] flex items-center justify-center p-5 transition-opacity',
+          'm3-scrim z-[1200] flex items-center justify-center p-5 transition-opacity',
           editorOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none invisible opacity-0'
         )}
         aria-hidden={!editorOpen}
@@ -1077,44 +1047,44 @@ export function FilesPage({
         }}
       >
         <div
-          className="relative flex w-full max-w-[780px] flex-col gap-4 rounded-[var(--radius-lg)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] p-6 shadow-[var(--shadow-3)]"
+          className="m3-dialog m3-dialog--enter relative max-w-[780px]"
           role="dialog"
           aria-modal="true"
           aria-labelledby="editorTitle"
         >
           <button
-            className="absolute right-4 top-4 text-[var(--md-sys-color-on-surface-variant)]"
+            className="m3-icon-btn m3-state m3-icon-btn--sm absolute right-4 top-4"
             onClick={() => setEditorOpen(false)}
             aria-label={t('files_close')}
           >
             <X className="h-5 w-5" />
           </button>
-          <div className="flex items-center gap-3 text-[var(--md-sys-color-primary)]">
-            <FileText className="h-6 w-6 rounded-[14px] bg-[var(--md-sys-color-primary-container)] p-2 text-[var(--md-sys-color-on-primary-container)]" />
-            <h2 id="editorTitle" className="font-display text-lg font-semibold">
+          <div className="flex items-center gap-3 text-primary">
+            <FileText className="m3-token m3-token--sm" />
+            <h2 id="editorTitle" className="m3-panel__title">
               Edit: {basename(editorPath)}
             </h2>
           </div>
           {editorLoading ? (
-            <div className="flex items-center gap-2 text-sm text-[var(--md-sys-color-on-surface-variant)]">
+            <div className="flex items-center gap-2 m3-body-medium m3-on-variant">
               <RefreshCw className="h-4 w-4 animate-spin" />
               {t('files_loading_contents')}
             </div>
           ) : editorError ? (
             <p className="text-sm text-red-500">{editorError}</p>
           ) : editorBinary ? (
-            <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">
+            <p className="m3-body-medium m3-on-variant">
               {t('files_binary_notice')}
             </p>
           ) : (
             <>
               {editorTruncated && (
-                <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                <p className="m3-body-small m3-on-variant">
                   Showing the first chunk of the file. Download for full editing.
                 </p>
               )}
               <textarea
-                className="min-h-[320px] w-full resize-y rounded-[var(--radius-md)] border border-[var(--md-sys-color-outline-variant)] bg-transparent p-3 text-sm"
+                className="m3-field m3-field--mono min-h-[320px]"
                 value={editorContent}
                 onChange={(event) => setEditorContent(event.target.value)}
               />
@@ -1138,7 +1108,7 @@ export function FilesPage({
 
       <div
         className={cn(
-          'modal-overlay fixed inset-0 z-[1200] flex items-center justify-center p-5 transition-opacity',
+          'm3-scrim z-[1200] flex items-center justify-center p-5 transition-opacity',
           selectedScreenshot ? 'pointer-events-auto opacity-100' : 'pointer-events-none invisible opacity-0'
         )}
         aria-hidden={!selectedScreenshot}
@@ -1149,37 +1119,38 @@ export function FilesPage({
         }}
       >
         <div
-          className="relative flex w-full max-w-[980px] flex-col gap-4 rounded-[var(--radius-lg)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] p-6 shadow-[var(--shadow-3)]"
+          className="m3-dialog m3-dialog--enter relative max-w-[980px]"
           role="dialog"
           aria-modal="true"
           aria-labelledby="screenshotTitle"
         >
           <button
-            className="absolute right-4 top-4 text-[var(--md-sys-color-on-surface-variant)]"
+            className="m3-icon-btn m3-state m3-icon-btn--sm absolute right-4 top-4"
             onClick={closeScreenshot}
             aria-label="Close"
           >
             <X className="h-5 w-5" />
           </button>
-          <div className="flex items-center gap-3 text-[var(--md-sys-color-primary)]">
-            <Monitor className="h-6 w-6 rounded-[14px] bg-[var(--md-sys-color-primary-container)] p-2 text-[var(--md-sys-color-on-primary-container)]" />
-            <h2 id="screenshotTitle" className="font-display text-lg font-semibold">
+          <div className="flex items-center gap-3 text-primary">
+            <Monitor className="m3-token m3-token--sm" />
+            <h2 id="screenshotTitle" className="m3-panel__title">
               {screenshotPreviewTitle}
             </h2>
           </div>
           {selectedScreenshot && (
             <>
-              <div className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] p-2">
+              <div className="m3-tray overflow-hidden p-2">
                 <img
                   src={screenshotSrc(selectedScreenshot)}
                   alt={selectedScreenshot.caption || selectedScreenshot.filename}
                   className="max-h-[60vh] w-full object-contain"
+                  decoding="async"
                 />
               </div>
               <label className="flex flex-col gap-2 text-sm">
-                <span className="text-[var(--md-sys-color-on-surface-variant)]">{captionLabel}</span>
+                <span className="text-on-surface-variant">{captionLabel}</span>
                 <input
-                  className="w-full rounded-[var(--radius-md)] border border-[var(--md-sys-color-outline-variant)] bg-transparent px-3 py-2 text-sm"
+                  className="m3-field"
                   type="text"
                   value={captionDraft}
                   onChange={(event) => setCaptionDraft(event.target.value)}
@@ -1187,7 +1158,7 @@ export function FilesPage({
                 />
               </label>
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                <span className="m3-body-small m3-on-variant">
                   {selectedScreenshot.filename}
                 </span>
                 <div className="flex flex-wrap items-center gap-2">

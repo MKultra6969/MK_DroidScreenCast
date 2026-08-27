@@ -1,9 +1,9 @@
 //! Владение `config.json`: чтение, миграция и атомарная запись.
 //!
-//! Порт `mkdsc/config.py`. С этой вехи файл принадлежит Rust: Python-бэкенд
-//! запускается с `MKDSC_CONFIG_READONLY=1` и только читает. Двух писателей быть
-//! не должно — атомарная запись спасает от обрыва посреди файла, но не от того,
-//! что второй процесс перезапишет чужие правки целиком.
+//! Порт `mkdsc/config.py`; файлом распоряжается только это приложение.
+//! Атомарная запись спасает от обрыва посреди файла, но не от второго
+//! писателя: тот перезаписал бы чужие правки целиком, поэтому запускать рядом
+//! что-то ещё, пишущее в `config.json`, нельзя.
 //!
 //! Работа идёт через `serde_json::Value`, а не через типизированные структуры,
 //! и с включённой фичей `preserve_order`. Причина: конфиг правится руками и
@@ -27,19 +27,24 @@ use tauri::AppHandle;
 use crate::error::ApiError;
 use crate::paths;
 
-/// Версия схемы конфига. Зеркалит `mkdsc/constants.py::CONFIG_SCHEMA_VERSION`.
-pub const CONFIG_SCHEMA_VERSION: i64 = 1;
+/// Версия схемы конфига.
+///
+/// 2 — из конфига убраны секции `web` и `cli`: их читал только Python-бэкенд
+/// (хост и порт HTTP-сервера, баннер CLI), а его больше нет. Миграция удаляет
+/// их из существующих файлов, см. `migrate_config`.
+pub const CONFIG_SCHEMA_VERSION: i64 = 2;
 
 /// Секции, которые обязаны быть объектами; всё прочее сбрасывается в дефолт.
-const DICT_SECTIONS: [&str; 7] = [
-    "web",
+const DICT_SECTIONS: [&str; 5] = [
     "logs",
     "downloads",
     "connection_optimizer",
     "recording",
-    "cli",
     "scrcpy",
 ];
+
+/// Секции, оставшиеся от Python-бэкенда: удаляются при миграции.
+const REMOVED_SECTIONS: [&str; 2] = ["web", "cli"];
 
 /// Процессный замок вокруг пары «чтение — изменение — запись».
 ///
@@ -98,11 +103,6 @@ pub fn default_config() -> Map<String, Value> {
     let value = json!({
         "config_version": CONFIG_SCHEMA_VERSION,
         "language": "en",
-        "web": {
-            "host": "127.0.0.1",
-            "port": 6969,
-            "auto_open": true,
-        },
         "logs": {
             "export_dir": "",
         },
@@ -121,9 +121,6 @@ pub fn default_config() -> Map<String, Value> {
             "stay_awake": false,
             "show_touches": false,
             "turn_screen_off": false,
-        },
-        "cli": {
-            "show_banner": true,
         },
         "scrcpy": {
             "bitrate": "8M",
@@ -164,22 +161,6 @@ pub fn is_truthy(value: &Value) -> bool {
         Value::String(text) => !text.is_empty(),
         Value::Array(items) => !items.is_empty(),
         Value::Object(map) => !map.is_empty(),
-    }
-}
-
-/// Аналог `int(value)`: `bool` — 0/1, число — усечение к нулю, строка —
-/// разбор. Всё остальное — `None`, как `TypeError`/`ValueError` в Python.
-fn python_int(value: &Value) -> Option<i64> {
-    match value {
-        Value::Bool(flag) => Some(i64::from(*flag)),
-        Value::Number(number) => match number.as_i64() {
-            Some(exact) => Some(exact),
-            // `int(6969.9) == 6969`; строку с точкой Python бы не принял, и
-            // `parse::<i64>` тоже не принимает — расхождения нет.
-            None => number.as_f64().map(|n| n.trunc() as i64),
-        },
-        Value::String(text) => text.trim().parse::<i64>().ok(),
-        _ => None,
     }
 }
 
@@ -303,27 +284,6 @@ fn sanitize_config(config: Value) -> (Map<String, Value>, bool) {
         changed = true;
     }
 
-    let default_port = python_int(&defaults["web"]["port"]).unwrap_or(6969);
-    let web = section_mut(&mut config, "web");
-    let port = web
-        .get("port")
-        .and_then(python_int)
-        .filter(|port| (1..=65535).contains(port))
-        .unwrap_or(default_port);
-    if web.get("port") != Some(&Value::from(port)) {
-        web.insert("port".to_string(), Value::from(port));
-        changed = true;
-    }
-
-    if web
-        .get("host")
-        .and_then(Value::as_str)
-        .is_none_or(|host| host.trim().is_empty())
-    {
-        web.insert("host".to_string(), defaults["web"]["host"].clone());
-        changed = true;
-    }
-
     (config, changed)
 }
 
@@ -341,6 +301,18 @@ fn migrate_config(config: Value, legacy_devices: &Path) -> (Map<String, Value>, 
             Value::from(CONFIG_SCHEMA_VERSION),
         );
         changed = true;
+    }
+
+    // Схема 1 → 2: `web` и `cli` настраивали Python-бэкенд, которого больше
+    // нет. Оставлять их в файле — обещать пользователю настройку, которая ни
+    // на что не влияет: редактор конфига показывает файл как есть.
+    // `shift_remove`, а не `remove`: при `preserve_order` последний работает
+    // как `swap_remove` и переставил бы на место удалённой секции последний
+    // ключ файла.
+    for section in REMOVED_SECTIONS {
+        if config.shift_remove(section).is_some() {
+            changed = true;
+        }
     }
 
     let scrcpy = section_mut(&mut config, "scrcpy");
@@ -733,10 +705,48 @@ mod tests {
 
     // -- порт `tests/test_config.py` ---------------------------------------
 
-    /// `test_default_host_is_loopback`.
+    /// Схема 2: секций Python-бэкенда в дефолте нет.
     #[test]
-    fn default_host_is_loopback() {
-        assert_eq!(default_config()["web"]["host"], json!("127.0.0.1"));
+    fn defaults_have_no_backend_sections() {
+        let defaults = default_config();
+        for section in REMOVED_SECTIONS {
+            assert!(
+                defaults.get(section).is_none(),
+                "секция {section} осталась в дефолте"
+            );
+        }
+        assert_eq!(defaults["config_version"], json!(2));
+    }
+
+    /// Конфиг схемы 1 теряет `web` и `cli`, остальные ключи и их порядок
+    /// переживают миграцию.
+    #[test]
+    fn migration_drops_backend_sections() {
+        let temp = TempDir::new("schema-2");
+        let paths = temp.paths();
+
+        let legacy = json!({
+            "config_version": 1,
+            "language": "ru",
+            "web": {"host": "127.0.0.1", "port": 6969, "auto_open": true},
+            "logs": {"export_dir": ""},
+            "cli": {"show_banner": true},
+            "devices": [{"ip": "10.0.0.2", "port": "5555"}],
+        });
+
+        let (result, changed) = migrate_config(legacy, &paths.legacy_devices);
+
+        assert!(changed, "миграция обязана попросить перезапись файла");
+        assert!(result.get("web").is_none());
+        assert!(result.get("cli").is_none());
+        assert_eq!(result["config_version"], json!(2));
+        assert_eq!(result["language"], json!("ru"));
+        assert_eq!(result["devices"][0]["ip"], json!("10.0.0.2"));
+        // `remove` при `preserve_order` — это `swap_remove`: он бы утащил на
+        // место `web` последний ключ конфига.
+        let keys: Vec<&str> = result.keys().map(String::as_str).collect();
+        assert_eq!(keys.first(), Some(&"config_version"));
+        assert_eq!(keys.get(1), Some(&"language"));
     }
 
     /// `test_migrate_survives_wrong_types` — BUG-09: одна `null`-секция
@@ -745,7 +755,7 @@ mod tests {
     fn migrate_survives_wrong_types() {
         let payloads = [
             json!({"scrcpy": null}),
-            json!({"web": 5}),
+            json!({"downloads": 5}),
             json!({"logs": []}),
             json!({"recording": "x"}),
             json!({"devices": 3}),
@@ -759,7 +769,7 @@ mod tests {
             let merged = deep_merge(&default_config(), &object(payload.clone()));
             let (result, _) = migrate_config(Value::Object(merged), &paths.legacy_devices);
             assert!(result["scrcpy"].is_object(), "случай: {payload}");
-            assert!(result["web"].is_object(), "случай: {payload}");
+            assert!(result["downloads"].is_object(), "случай: {payload}");
             assert!(result["devices"].is_array(), "случай: {payload}");
         }
     }
@@ -787,7 +797,8 @@ mod tests {
         std::fs::write(&paths.config, "{not json").expect("пишем мусор");
 
         let loaded = load_at(&paths).expect("конфиг читается");
-        assert_eq!(loaded["web"]["port"], json!(6969));
+        assert_eq!(loaded["language"], json!("en"));
+        assert!(is_truthy(&loaded["scrcpy"]["presets"]));
         assert!(backup_path(&paths.config).exists());
     }
 
@@ -884,39 +895,7 @@ mod tests {
         assert!(leftovers.is_empty(), "остались временные файлы: {leftovers:?}");
     }
 
-    /// `test_invalid_port_falls_back`.
-    #[test]
-    fn invalid_port_falls_back() {
-        let temp = TempDir::new("port");
-        let paths = temp.paths();
-        let merged = deep_merge(&default_config(), &object(json!({"web": {"port": "banana"}})));
-        let (result, _) = migrate_config(Value::Object(merged), &paths.legacy_devices);
-        assert_eq!(result["web"]["port"], json!(6969));
-    }
-
     // -- дополнительно ------------------------------------------------------
-
-    /// Порт-строка приводится к числу, порт вне диапазона — к дефолтному.
-    #[test]
-    fn port_is_normalized() {
-        let temp = TempDir::new("port-range");
-        let paths = temp.paths();
-        let cases = [
-            (json!("7000"), json!(7000)),
-            (json!(0), json!(6969)),
-            (json!(70000), json!(6969)),
-            (json!(null), json!(6969)),
-            (json!(8080), json!(8080)),
-        ];
-        for (input, expected) in cases {
-            let merged = deep_merge(
-                &default_config(),
-                &object(json!({"web": {"port": input.clone()}})),
-            );
-            let (result, _) = migrate_config(Value::Object(merged), &paths.legacy_devices);
-            assert_eq!(result["web"]["port"], expected, "порт: {input}");
-        }
-    }
 
     /// Пресеты без имени выбрасываются, пустой список восстанавливается.
     #[test]

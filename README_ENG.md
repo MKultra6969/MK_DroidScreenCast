@@ -18,7 +18,7 @@
 
 ## About
 
-MK DroidScreenCast is a full desktop application that wraps `adb` and `scrcpy` with a focused UI. It runs a local backend, handles tool downloads, and keeps everything inside a single app window.
+MK DroidScreenCast is a full desktop application that wraps `adb` and `scrcpy` with a focused UI. All of the logic lives inside the app itself — no helper process, no local port — it downloads the tools it needs and keeps everything inside a single window.
 
 ---
 

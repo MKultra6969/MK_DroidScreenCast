@@ -33,24 +33,20 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
     return (
       <div className="min-h-screen">
-        <div className="background">
-          <div className="orb orb-1" />
-          <div className="orb orb-2" />
-          <div className="grid-overlay" />
-        </div>
+        <div className="app-backdrop" aria-hidden />
         <div className="flex min-h-screen items-center justify-center p-6">
-          <div className="w-full max-w-[520px] rounded-[var(--radius-lg)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] p-6 text-center shadow-[var(--shadow-3)]">
-            <h1 className="font-display text-xl font-semibold">Something went wrong</h1>
-            <p className="mt-2 text-sm text-[var(--md-sys-color-on-surface-variant)]">
+          <div className="m3-dialog m3-dialog--enter max-w-[520px] text-center">
+            <h1 className="m3-headline-small">Something went wrong</h1>
+            <p className="mt-2 m3-body-medium m3-on-variant">
               The UI hit an unexpected error. Reload to try again.
             </p>
             {this.state.error?.message && (
-              <pre className="mt-3 max-h-40 overflow-auto rounded-[var(--radius-sm)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] p-3 text-left text-xs text-[var(--md-sys-color-on-surface-variant)]">
+              <pre className="m3-code mt-3 max-h-40 text-left">
                 {this.state.error.message}
               </pre>
             )}
             <button
-              className="mt-4 inline-flex items-center justify-center rounded-full bg-[var(--md-sys-color-primary)] px-4 py-2 text-sm font-semibold text-[var(--md-sys-color-on-primary)] shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]"
+              className="m3-btn m3-state m3-btn--filled m3-btn--sm mt-4"
               type="button"
               onClick={this.handleReload}
             >

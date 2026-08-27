@@ -21,8 +21,8 @@ import {
   openReleasePage,
   restartApp
 } from './lib/updater';
+import { keepIfEqual } from './lib/state';
 import { FIRST_RUN_KEY } from './lib/storage';
-import { formatDuration } from './lib/time';
 import { initialFormState } from './state/form';
 import type { Device, FileEntry, FormState, Notification, Preset, RecordingStatus, SavedDevice, Screenshot } from './types/app';
 import { cn } from './utils';
@@ -83,9 +83,6 @@ function App() {
   const [recordingStatus, setRecordingStatus] = useState<RecordingStatus | null>(null);
   const [recordingLoading, setRecordingLoading] = useState(false);
   const [recordingSaving, setRecordingSaving] = useState(false);
-  // A ticking timestamp rather than a counter, so the elapsed-time memo has a
-  // dependency it genuinely reads.
-  const [recordingNow, setRecordingNow] = useState(() => Date.now());
   const [firstRunOpen, setFirstRunOpen] = useState(false);
   const [devicesLoading, setDevicesLoading] = useState(true);
   const [savedLoading, setSavedLoading] = useState(true);
@@ -337,8 +334,8 @@ function App() {
         throw new Error(`devices request failed: ${response.status}`);
       }
       const data = await response.json();
-      setActiveDevices(normalizeDevices(data.connected));
-      setSavedDevices(normalizeSavedDevices(data.saved));
+      setActiveDevices(keepIfEqual(normalizeDevices(data.connected)));
+      setSavedDevices(keepIfEqual(normalizeSavedDevices(data.saved)));
     } catch (error) {
       console.error('loadDevices error', error);
     } finally {
@@ -361,7 +358,7 @@ function App() {
           lastRecordingErrorRef.current = errorKey;
         }
       }
-      setRecordingStatus(data);
+      setRecordingStatus(keepIfEqual(data));
     } catch (error) {
       console.error('loadRecordingStatus error', error);
     }
@@ -443,16 +440,12 @@ function App() {
   useEffect(() => {
     if (!appReady) return;
     void loadRecordingStatus();
-    const intervalId = window.setInterval(loadRecordingStatus, 2000);
+    // Во время записи статус нужен часто — он питает баннер. В простое
+    // достаточно редкой сверки: чаще опрашивать нечего, а каждый опрос — это
+    // ещё один вызов в бэкенд и ещё один цикл сравнения состояния.
+    const intervalId = window.setInterval(loadRecordingStatus, recordingStatus?.active ? 2000 : 10000);
     return () => window.clearInterval(intervalId);
-  }, [appReady, loadRecordingStatus]);
-
-  useEffect(() => {
-    if (!recordingStatus?.active) return;
-    setRecordingNow(Date.now());
-    const intervalId = window.setInterval(() => setRecordingNow(Date.now()), 1000);
-    return () => window.clearInterval(intervalId);
-  }, [recordingStatus?.active]);
+  }, [appReady, loadRecordingStatus, recordingStatus?.active]);
 
   useEffect(() => {
     if (!form.scrcpyDevice) return;
@@ -1898,13 +1891,6 @@ function App() {
     return joinPath(videoRoot, recordingPreviewName);
   }, [downloadsBaseDir, form.recordingOutputDir, recordingPreviewName]);
 
-  const recordingElapsed = useMemo(() => {
-    if (!recordingStatus?.active || !recordingStatus.started_at) return null;
-    const start = new Date(recordingStatus.started_at).getTime();
-    if (Number.isNaN(start)) return null;
-    return formatDuration(recordingNow - start);
-  }, [recordingStatus?.active, recordingStatus?.started_at, recordingNow]);
-
   const activePage = useMemo(() => getPageForSection(activeSection), [activeSection]);
 
   // currentPath is deliberately not a dependency: loadFiles sets it on success,
@@ -1969,11 +1955,9 @@ function App() {
     : theme === 'dark' ? t('theme_dark') : t('theme_light');
   return (
     <div className="min-h-screen">
-      <div className="background">
-        <div className="orb orb-1" />
-        <div className="orb orb-2" />
-        <div className="grid-overlay" />
-      </div>
+      {/* Один статичный слой вместо трёх анимированных: фон рисуется один раз
+          и больше не участвует в кадрах. */}
+      <div className="app-backdrop" aria-hidden />
 
       <Sidebar
         t={t}
@@ -1996,20 +1980,18 @@ function App() {
 
       <div
         className={cn(
-          'transition-all duration-300',
-          'md:ml-[260px]',
-          !sidebarOpen && 'md:ml-[60px]'
+          'transition-[margin] duration-medium ease-emphasized',
+          sidebarOpen ? 'md:ml-[var(--app-drawer-width)]' : 'md:ml-[var(--app-rail-width)]'
         )}
       >
         <RecordingBanner
           recordingStatus={recordingStatus}
-          recordingElapsed={recordingElapsed}
           recordingLoading={recordingLoading}
           onStop={() => void stopRecording()}
           t={t}
         />
 
-        <div className="mx-auto flex w-full max-w-[1220px] flex-col gap-7">
+        <div className="mx-auto flex w-full max-w-content flex-col gap-6 p-5 pb-8 max-md:pt-20 sm:p-7 sm:pb-10">
           <Header
             t={t}
             lang={lang}
@@ -2017,7 +1999,7 @@ function App() {
             onLanguageChange={(value) => void handleLanguageChange(value)}
           />
 
-          <main className="flex flex-col gap-7">
+          <main className="flex flex-col gap-6">
             {activePage === 'home' && (
               <HomePage
                 t={t}

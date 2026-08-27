@@ -1,4 +1,5 @@
-import { Smartphone } from 'lucide-react';
+import { memo } from 'react';
+import { Languages, Smartphone } from 'lucide-react';
 import { delayStyle } from '../../lib/style';
 
 type HeaderProps = {
@@ -8,40 +9,53 @@ type HeaderProps = {
   onLanguageChange: (value: string) => void;
 };
 
-export function Header({ t, lang, languages, onLanguageChange }: HeaderProps) {
+function HeaderView({ t, lang, languages, onLanguageChange }: HeaderProps) {
   return (
-    <header className="hero reveal" style={delayStyle(0)}>
-      <div className="relative z-10 flex flex-wrap items-center justify-between gap-6">
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="grid h-14 w-14 place-items-center rounded-[18px] bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)] shadow-[inset_0_0_0_1px_rgba(5,60,54,0.1)]">
-            <Smartphone className="h-9 w-9" />
-          </div>
-          <div>
-            <h1 className="font-display text-2xl font-bold">{t('title')}</h1>
-            <p className="mt-1 text-sm text-[var(--md-sys-color-on-surface-variant)]">{t('subtitle')}</p>
+    <header
+      className="m3-enter relative overflow-hidden rounded-m3xxl bg-surface-low p-6 shadow-e1 sm:p-8"
+      style={delayStyle(0)}
+    >
+      {/*
+        Акцентная подсветка — один статичный градиент. Раньше здесь было три
+        слоя с рамками и бесконечной анимацией; выглядело так же, а стоило
+        перерисовки шапки на каждом кадре. Радиальные пятна вместо кругов с
+        `filter: blur()`: мягкий край получается из самого градиента, растровый
+        проход не нужен.
+      */}
+      <div aria-hidden className="app-hero-glow" />
+
+      <div className="relative flex flex-wrap items-center justify-between gap-6">
+        <div className="flex min-w-0 items-center gap-4">
+          <span className="grid h-14 w-14 shrink-0 place-items-center rounded-m3lg bg-primary text-on-primary shadow-e2">
+            <Smartphone className="h-7 w-7" />
+          </span>
+          <div className="min-w-0">
+            <h1 className="m3-headline-medium truncate">{t('title')}</h1>
+            <p className="m3-body-medium m3-on-variant mt-1">{t('subtitle')}</p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-4 text-sm text-[var(--md-sys-color-on-surface-variant)]">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs" htmlFor="langSelect">
-              {t('language_label')}
-            </label>
-            <select
-              id="langSelect"
-              className="w-24 rounded-[var(--radius-sm)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-3 py-2 text-xs text-[var(--md-sys-color-on-surface)] focus:border-[var(--md-sys-color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)]"
-              value={lang}
-              onChange={(event) => onLanguageChange(event.target.value)}
-            >
-              {languages.map((item) => (
-                <option key={item} value={item}>
-                  {item.toUpperCase()}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+        <label className="flex items-center gap-2.5">
+          <span className="m3-field-label">
+            <Languages />
+            <span className="sr-only sm:not-sr-only">{t('language_label')}</span>
+          </span>
+          <select
+            className="m3-field m3-select m3-field--sm w-[92px]"
+            value={lang}
+            onChange={(event) => onLanguageChange(event.target.value)}
+            aria-label={t('language_label')}
+          >
+            {languages.map((item) => (
+              <option key={item} value={item}>
+                {item.toUpperCase()}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
     </header>
   );
 }
+
+export const Header = memo(HeaderView);

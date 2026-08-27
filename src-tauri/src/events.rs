@@ -4,8 +4,6 @@
 //! тем же payload, что слал сокет (`{type, devices, timestamp}`). Благодаря
 //! этому обработчик в `App.tsx` переехал один в один: поменялся только способ
 //! подписки.
-//!
-//! WebSocket в Python остаётся — он нужен веб-панели до конца миграции.
 
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};

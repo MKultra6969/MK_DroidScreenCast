@@ -11,8 +11,9 @@ export function FirstRunModal({ open, onClose, t }: FirstRunModalProps) {
   return (
     <div
       className={cn(
-        'modal-overlay fixed inset-0 z-[1200] flex items-center justify-center p-5 transition-opacity',
-        // invisible keeps the hidden dialog's controls out of the tab order
+        'm3-scrim z-[1200] flex items-center justify-center p-5',
+        'transition-opacity duration-medium ease-emphasized',
+        // invisible убирает элементы закрытого диалога из порядка обхода Tab
         open ? 'pointer-events-auto opacity-100' : 'pointer-events-none invisible opacity-0'
       )}
       aria-hidden={!open}
@@ -23,50 +24,50 @@ export function FirstRunModal({ open, onClose, t }: FirstRunModalProps) {
       }}
     >
       <div
-        className="relative flex w-full max-w-[560px] flex-col gap-4 rounded-[var(--radius-lg)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] p-6 shadow-[var(--shadow-3)]"
+        className={cn('m3-dialog relative max-w-[580px]', open && 'm3-dialog--enter')}
         role="dialog"
         aria-modal="true"
         aria-labelledby="firstRunTitle"
       >
         <button
-          className="absolute right-4 top-4 text-[var(--md-sys-color-on-surface-variant)]"
+          className="m3-icon-btn m3-state m3-icon-btn--sm absolute right-4 top-4"
           onClick={onClose}
           aria-label="Close"
+          type="button"
         >
-          <X className="h-5 w-5" />
+          <X />
         </button>
-        <div className="flex items-center gap-3 text-[var(--md-sys-color-primary)]">
-          <Sparkles className="h-6 w-6 rounded-[14px] bg-[var(--md-sys-color-primary-container)] p-2 text-[var(--md-sys-color-on-primary-container)]" />
-          <h2 id="firstRunTitle" className="font-display text-lg font-semibold">
+
+        <div className="flex items-center gap-3.5 pr-10">
+          <Sparkles className="m3-token" />
+          <h2 id="firstRunTitle" className="m3-title-large">
             {t('first_run_title')}
           </h2>
         </div>
-        <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">{t('first_run_intro')}</p>
-        <div className="grid gap-3">
+
+        <p className="m3-body-medium m3-on-variant">{t('first_run_intro')}</p>
+
+        <ol className="flex flex-col gap-2.5">
           {[
             { title: t('faq_step1_title'), body: t('faq_step1_body') },
             { title: t('faq_step2_title'), body: t('faq_step2_body') },
             { title: t('faq_step3_title'), body: t('faq_step3_body') },
             { title: t('faq_step4_title'), body: t('faq_step4_body') }
-          ].map((item) => (
-            <div
-              key={item.title}
-              className="rounded-[var(--radius-md)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-4 py-3"
-            >
-              <h3 className="text-sm font-semibold">{item.title}</h3>
-              <p className="mt-1 text-xs text-[var(--md-sys-color-on-surface-variant)]">{item.body}</p>
-            </div>
+          ].map((item, index) => (
+            <li key={item.title} className="flex items-start gap-3 rounded-m3lg bg-surface-container p-4">
+              <span className="m3-label-medium grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary text-on-primary">
+                {index + 1}
+              </span>
+              <div className="min-w-0">
+                <h3 className="m3-title-small">{item.title}</h3>
+                <p className="m3-body-small m3-on-variant mt-1">{item.body}</p>
+              </div>
+            </li>
           ))}
-        </div>
-        <button
-          className={cn(
-            'inline-flex items-center gap-2 self-start rounded-full bg-[var(--md-sys-color-primary)] px-4 py-2 text-sm font-semibold text-[var(--md-sys-color-on-primary)]',
-            'shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]',
-            'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-outline)]'
-          )}
-          onClick={onClose}
-        >
-          <Check className="h-4 w-4" />
+        </ol>
+
+        <button className="m3-btn m3-state m3-btn--filled self-start" onClick={onClose} type="button">
+          <Check />
           {t('first_run_button')}
         </button>
       </div>

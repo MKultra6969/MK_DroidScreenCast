@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Github, Send } from 'lucide-react';
 
 type FooterProps = {
@@ -5,35 +6,34 @@ type FooterProps = {
   version?: string;
 };
 
-export function Footer({ t, version }: FooterProps) {
+function FooterView({ t, version }: FooterProps) {
   return (
-    <footer className="flex flex-col items-center gap-3 border-t border-[var(--md-sys-color-outline-variant)] pt-4 text-center text-sm text-[var(--md-sys-color-on-surface-variant)]">
-      <p>{t('footer_notice')}</p>
-      <div className="flex flex-wrap justify-center gap-6">
+    <footer className="flex flex-col items-center gap-3 pb-2 pt-2 text-center">
+      <hr className="m3-divider w-full" />
+      <p className="m3-body-small m3-on-variant">{t('footer_notice')}</p>
+      <div className="flex flex-wrap items-center justify-center gap-2">
         <a
+          className="m3-btn m3-state m3-btn--text m3-btn--sm"
           href="https://github.com/MKultra6969"
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-2 font-semibold text-[var(--md-sys-color-primary)] hover:underline"
         >
-          <Github className="h-4 w-4" />
+          <Github />
           GitHub
         </a>
         <a
+          className="m3-btn m3-state m3-btn--text m3-btn--sm"
           href="https://t.me/MKplusULTRA"
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-2 font-semibold text-[var(--md-sys-color-primary)] hover:underline"
         >
-          <Send className="h-4 w-4" />
+          <Send />
           Telegram
         </a>
+        {version && <span className="m3-badge">v{version}</span>}
       </div>
-      {version ? (
-        <div className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)]">
-          v{version}
-        </div>
-      ) : null}
     </footer>
   );
 }
+
+export const Footer = memo(FooterView);

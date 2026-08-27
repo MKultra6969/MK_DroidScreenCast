@@ -1,0 +1,245 @@
+/*
+ * Базовый слой: сброс, каркас документа, типографическая шкала M3 и фон.
+ *
+ * Про производительность. Раньше фон складывался из двух размытых «орбов»
+ * (`filter: blur(18px)`) и градиента с бесконечной анимацией. В WebView это
+ * означало, что композитор перерисовывал полноэкранный слой каждый кадр —
+ * приложение грело процессор, ничего при этом не делая. Здесь фон статичен:
+ * браузер растрирует его один раз и больше к нему не возвращается.
+ */
+
+html {
+  /* Полосу прокрутки рисуем сами (см. ниже), поэтому системную гасим. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--md-sys-color-outline-variant) transparent;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--md-sys-typescale-plain);
+  font-size: 14px;
+  line-height: 1.5;
+  background: var(--md-sys-color-background);
+  color: var(--md-sys-color-on-surface);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  /* Резинка прокрутки в WebView выглядит как «отклеившийся» интерфейс. */
+  overscroll-behavior: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+img,
+svg,
+video {
+  display: block;
+  max-width: 100%;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--md-sys-color-primary) 24%, transparent);
+}
+
+/* ── Фон приложения ─────────────────────────────────────────────────────
+   Один фиксированный слой, статичный градиент, без blur и без анимации. */
+.app-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(1200px 620px at 8% -8%,
+      color-mix(in srgb, var(--md-sys-color-primary) 16%, transparent), transparent 62%),
+    radial-gradient(1000px 560px at 102% 4%,
+      color-mix(in srgb, var(--md-sys-color-secondary) 13%, transparent), transparent 58%),
+    radial-gradient(900px 700px at 76% 108%,
+      color-mix(in srgb, var(--md-sys-color-tertiary) 12%, transparent), transparent 60%),
+    var(--md-sys-color-background);
+}
+
+/* ── Типографическая шкала M3 ───────────────────────────────────────────
+   Expressive добавляет «emphasized»-начертания: у заголовков вес выше,
+   трекинг плотнее. */
+.m3-display-small {
+  font-family: var(--md-sys-typescale-brand);
+  font-size: 32px;
+  line-height: 40px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.m3-headline-medium {
+  font-family: var(--md-sys-typescale-brand);
+  font-size: 26px;
+  line-height: 32px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+
+.m3-headline-small {
+  font-family: var(--md-sys-typescale-brand);
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.m3-title-large {
+  font-family: var(--md-sys-typescale-brand);
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 650;
+  letter-spacing: -0.005em;
+}
+
+.m3-title-medium {
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 640;
+  letter-spacing: 0.005em;
+}
+
+.m3-title-small {
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 640;
+  letter-spacing: 0.01em;
+}
+
+.m3-body-large {
+  font-size: 15px;
+  line-height: 22px;
+}
+
+.m3-body-medium {
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.m3-body-small {
+  font-size: 12.5px;
+  line-height: 18px;
+}
+
+.m3-label-large {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 620;
+  letter-spacing: 0.005em;
+}
+
+.m3-label-medium {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 620;
+  letter-spacing: 0.03em;
+}
+
+.m3-label-small {
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 620;
+  letter-spacing: 0.04em;
+}
+
+.m3-on-variant {
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+/* ── Фокус ──────────────────────────────────────────────────────────────
+   Единое кольцо на весь интерфейс: три токена вместо повторяющейся
+   цепочки focus-visible:outline-* в каждом className. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--md-sys-color-primary) 60%, transparent);
+  outline-offset: 2px;
+  border-radius: var(--md-sys-shape-sm);
+}
+
+/* ── Полосы прокрутки ───────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--md-sys-color-outline) 45%, transparent);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: var(--md-sys-shape-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--md-sys-color-outline) 75%, transparent);
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ── Появление контента ─────────────────────────────────────────────────
+   Только transform и opacity — их анимирует композитор, без перерисовки.
+   Прежний вариант анимировал ещё и `filter: blur()`, а это полноценный
+   растровый проход на каждый кадр для каждой карточки. */
+@keyframes m3-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.m3-enter {
+  animation: m3-enter var(--md-sys-motion-duration-medium4)
+    var(--md-sys-motion-easing-emphasized-decelerate) both;
+  animation-delay: var(--delay, 0ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,1300 @@
+/*
+ * Слой компонентов MD3 / Material 3 Expressive.
+ *
+ * Здесь живёт весь внешний вид: кнопки, поля, карточки, навигация, диалоги.
+ * Разметка описывает структуру и раскладку (утилитами Tailwind), а как это
+ * выглядит — решают классы отсюда.
+ *
+ * Так сделано не ради красоты исходника. Раньше один и тот же набор из
+ * восьми-десяти произвольных значений (`bg-[var(--md-sys-color-primary)]`,
+ * `shadow-[var(--shadow-1)]`, `hover:-translate-y-0.5`…) повторялся в разметке
+ * десятки раз. Каждое такое повторение — лишние сотни байт в DOM и лишняя
+ * работа для движка стилей при каждом рендере. Один класс вместо десяти
+ * произвольных значений и стоит в разы дешевле, и даёт единый вид.
+ *
+ * Анимируем только `transform`, `opacity` и `border-radius` — их WebView
+ * обрабатывает на композиторе. Никаких `filter: blur()` и `backdrop-filter`
+ * в постоянно живущих элементах.
+ */
+
+/* ══ State layer ═══════════════════════════════════════════════════════
+   Слой состояния M3: полупрозрачная плёнка currentColor поверх фона, но под
+   содержимым. Меняется только `opacity`, то есть кадры готовит композитор. */
+.m3-state {
+  position: relative;
+  isolation: isolate;
+}
+
+.m3-state::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--md-sys-motion-duration-short3)
+    var(--md-sys-motion-easing-standard);
+}
+
+.m3-state:hover:not(:disabled)::after {
+  opacity: var(--md-sys-state-hover);
+}
+
+.m3-state:focus-visible::after {
+  opacity: var(--md-sys-state-focus);
+}
+
+.m3-state:active:not(:disabled)::after {
+  opacity: var(--md-sys-state-pressed);
+}
+
+/* ══ Кнопки ════════════════════════════════════════════════════════════
+   Expressive-приём: в покое кнопка — пилюля, при нажатии углы «схлопываются»
+   до 12px. Форма отвечает на прикосновение, а не только цвет. */
+.m3-btn {
+  --m3-btn-height: 40px;
+  --m3-btn-pad: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: var(--m3-btn-height);
+  padding-inline: var(--m3-btn-pad);
+  border: none;
+  border-radius: var(--md-sys-shape-full);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 620;
+  letter-spacing: 0.005em;
+  line-height: 1;
+  white-space: nowrap;
+  user-select: none;
+  transition:
+    border-radius var(--md-sys-motion-duration-medium1) var(--md-sys-motion-spring-fast),
+    box-shadow var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
+    transform var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard),
+    background-color var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard);
+}
+
+.m3-btn:active:not(:disabled) {
+  border-radius: var(--md-sys-shape-md);
+  transform: scale(0.97);
+}
+
+.m3-btn:disabled {
+  opacity: 0.38;
+  box-shadow: none;
+}
+
+.m3-btn > svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+/* Размеры */
+.m3-btn--xs {
+  --m3-btn-height: 30px;
+  --m3-btn-pad: 12px;
+  font-size: 12px;
+  gap: 6px;
+}
+
+.m3-btn--xs > svg {
+  width: 15px;
+  height: 15px;
+}
+
+.m3-btn--sm {
+  --m3-btn-height: 36px;
+  --m3-btn-pad: 16px;
+  font-size: 13px;
+}
+
+.m3-btn--sm > svg {
+  width: 16px;
+  height: 16px;
+}
+
+.m3-btn--lg {
+  --m3-btn-height: 52px;
+  --m3-btn-pad: 28px;
+  font-size: 15px;
+  gap: 10px;
+}
+
+.m3-btn--lg > svg {
+  width: 20px;
+  height: 20px;
+}
+
+.m3-btn--block {
+  width: 100%;
+}
+
+/* Варианты */
+.m3-btn--filled {
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+  box-shadow: var(--md-sys-elevation-1);
+}
+
+.m3-btn--filled:hover:not(:disabled) {
+  box-shadow: var(--md-sys-elevation-2);
+}
+
+.m3-btn--tonal {
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+}
+
+.m3-btn--tonal:hover:not(:disabled) {
+  box-shadow: var(--md-sys-elevation-1);
+}
+
+.m3-btn--tonal-primary {
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+}
+
+.m3-btn--tonal-primary:hover:not(:disabled) {
+  box-shadow: var(--md-sys-elevation-1);
+}
+
+.m3-btn--elevated {
+  background: var(--md-sys-color-surface-container-low);
+  color: var(--md-sys-color-primary);
+  box-shadow: var(--md-sys-elevation-1);
+}
+
+.m3-btn--elevated:hover:not(:disabled) {
+  box-shadow: var(--md-sys-elevation-2);
+}
+
+.m3-btn--outlined {
+  background: transparent;
+  color: var(--md-sys-color-on-surface);
+  box-shadow: inset 0 0 0 1px var(--md-sys-color-outline);
+}
+
+.m3-btn--outlined:hover:not(:disabled) {
+  box-shadow: inset 0 0 0 1px var(--md-sys-color-outline-variant);
+}
+
+.m3-btn--text {
+  background: transparent;
+  color: var(--md-sys-color-primary);
+  --m3-btn-pad: 12px;
+}
+
+.m3-btn--danger {
+  background: var(--md-sys-color-error);
+  color: var(--md-sys-color-on-error);
+  box-shadow: var(--md-sys-elevation-1);
+}
+
+.m3-btn--danger:hover:not(:disabled) {
+  box-shadow: var(--md-sys-elevation-2);
+}
+
+.m3-btn--danger-tonal {
+  background: var(--md-sys-color-error-container);
+  color: var(--md-sys-color-on-error-container);
+}
+
+.m3-btn--success {
+  background: var(--md-sys-color-success);
+  color: var(--md-sys-color-on-success);
+  box-shadow: var(--md-sys-elevation-1);
+}
+
+/* Группа кнопок Expressive: слитная лента, внешние углы — пилюля. */
+.m3-btn-group {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.m3-btn-group > .m3-btn {
+  border-radius: var(--md-sys-shape-sm);
+}
+
+.m3-btn-group > .m3-btn:first-child {
+  border-start-start-radius: var(--md-sys-shape-full);
+  border-end-start-radius: var(--md-sys-shape-full);
+}
+
+.m3-btn-group > .m3-btn:last-child {
+  border-start-end-radius: var(--md-sys-shape-full);
+  border-end-end-radius: var(--md-sys-shape-full);
+}
+
+/* ══ Иконочные кнопки ══════════════════════════════════════════════════ */
+.m3-icon-btn {
+  --m3-icon-btn-size: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--m3-icon-btn-size);
+  height: var(--m3-icon-btn-size);
+  border: none;
+  border-radius: var(--md-sys-shape-full);
+  color: var(--md-sys-color-on-surface-variant);
+  background: transparent;
+  transition:
+    border-radius var(--md-sys-motion-duration-medium1) var(--md-sys-motion-spring-fast),
+    background-color var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard),
+    color var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard),
+    transform var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard);
+}
+
+.m3-icon-btn:active:not(:disabled) {
+  border-radius: var(--md-sys-shape-md);
+  transform: scale(0.92);
+}
+
+.m3-icon-btn:disabled {
+  opacity: 0.38;
+}
+
+.m3-icon-btn > svg {
+  width: 20px;
+  height: 20px;
+}
+
+.m3-icon-btn--sm {
+  --m3-icon-btn-size: 32px;
+}
+
+.m3-icon-btn--sm > svg {
+  width: 17px;
+  height: 17px;
+}
+
+.m3-icon-btn--lg {
+  --m3-icon-btn-size: 48px;
+}
+
+.m3-icon-btn--lg > svg {
+  width: 24px;
+  height: 24px;
+}
+
+.m3-icon-btn--filled {
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+}
+
+.m3-icon-btn--tonal {
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+}
+
+.m3-icon-btn--tonal-primary {
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+}
+
+.m3-icon-btn--outlined {
+  box-shadow: inset 0 0 0 1px var(--md-sys-color-outline-variant);
+  background: var(--md-sys-color-surface-container-low);
+}
+
+.m3-icon-btn--danger {
+  background: var(--md-sys-color-error-container);
+  color: var(--md-sys-color-on-error-container);
+}
+
+/* ══ FAB ═══════════════════════════════════════════════════════════════ */
+.m3-fab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 56px;
+  height: 56px;
+  padding-inline: 20px;
+  border-radius: var(--md-sys-shape-lg);
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+  font-weight: 640;
+  box-shadow: var(--md-sys-elevation-3);
+  transition:
+    border-radius var(--md-sys-motion-duration-medium2) var(--md-sys-motion-spring-default),
+    box-shadow var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
+    transform var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard);
+}
+
+.m3-fab:active {
+  border-radius: var(--md-sys-shape-xl);
+  transform: scale(0.96);
+}
+
+/* ══ Поверхности и карточки ════════════════════════════════════════════ */
+.m3-card {
+  border-radius: var(--md-sys-shape-lg);
+  background: var(--md-sys-color-surface-container-low);
+  color: var(--md-sys-color-on-surface);
+}
+
+.m3-card--outlined {
+  background: var(--md-sys-color-surface);
+  box-shadow: inset 0 0 0 1px var(--md-sys-color-outline-variant);
+}
+
+.m3-card--elevated {
+  background: var(--md-sys-color-surface-container-low);
+  box-shadow: var(--md-sys-elevation-1);
+}
+
+/* ── Панель: карточка-секция со сворачиваемым содержимым ────────────────
+   Expressive-форма: 28px по умолчанию. Наведение не двигает карточку —
+   сдвиг крупного блока заставляет WebView перерисовывать всё под ним;
+   вместо этого мягко подсвечивается контур. */
+.m3-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  /* Панель сама лежит в колоночном flex-контейнере, где автоматический
+     минимум элемента равен ширине его содержимого. Панель с длинной панелью
+     инструментов из-за этого раздвигала страницу вширь — вплоть до
+     горизонтальной прокрутки всего окна. */
+  min-width: 0;
+  border-radius: var(--md-sys-shape-xl);
+  background: var(--md-comp-panel-container);
+  box-shadow: inset 0 0 0 1px var(--md-sys-color-outline-variant);
+  transition:
+    box-shadow var(--md-sys-motion-duration-medium1) var(--md-sys-motion-easing-standard);
+}
+
+.m3-panel:hover {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--md-sys-color-primary) 34%, transparent),
+    var(--md-sys-elevation-1);
+}
+
+/* Секция, на которую увёл переход из меню. Подсветка держится, пока раздел
+   выбран, поэтому она приглушённая: сплошная рамка в цвет primary на весь
+   экран времени притягивала бы взгляд сильнее самого содержимого. */
+.m3-panel--active {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--md-sys-color-primary) 55%, transparent),
+    var(--md-sys-elevation-2);
+}
+
+.m3-panel__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 22px 14px;
+}
+
+.m3-panel__title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* Ведущая иконка секции — тональный «жетон». */
+.m3-panel__icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--md-sys-shape-md);
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+}
+
+.m3-panel__icon > svg {
+  width: 22px;
+  height: 22px;
+}
+
+.m3-panel__icon--secondary {
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+}
+
+.m3-panel__icon--tertiary {
+  background: var(--md-sys-color-tertiary-container);
+  color: var(--md-sys-color-on-tertiary-container);
+}
+
+/* Тот же жетон, но надетый прямо на <svg> иконки: у lucide нет обёртки, а
+   заводить лишний div вокруг каждой иконки — лишний узел в DOM на каждой
+   секции. padding + box-sizing дают тот же результат без него. */
+.m3-token {
+  width: 42px;
+  height: 42px;
+  flex: none;
+  padding: 10px;
+  border-radius: var(--md-sys-shape-md);
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+}
+
+.m3-token--sm {
+  width: 34px;
+  height: 34px;
+  padding: 8px;
+  border-radius: var(--md-sys-shape-sm);
+}
+
+.m3-token--secondary {
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+}
+
+.m3-token--tertiary {
+  background: var(--md-sys-color-tertiary-container);
+  color: var(--md-sys-color-on-tertiary-container);
+}
+
+.m3-panel__title {
+  font-family: var(--md-sys-typescale-brand);
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 650;
+  letter-spacing: -0.005em;
+  color: var(--md-sys-color-on-surface);
+}
+
+.m3-panel__subtitle {
+  font-size: 12.5px;
+  line-height: 17px;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.m3-panel__body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0 22px 22px;
+}
+
+/* Одиночная кнопка внутри колоночного тела иначе растянулась бы на всю
+   ширину: у flex-контейнера align-items по умолчанию stretch. Полям это
+   нужно (у них своя width: 100%), кнопке — нет. */
+.m3-panel__body > .m3-btn,
+.m3-panel__body > .m3-chip,
+.m3-panel__body > .m3-badge {
+  align-self: flex-start;
+}
+
+/* То же правило на уровень ниже: содержимое секции не должно уметь
+   распирать саму секцию. */
+.m3-panel__body > * {
+  min-width: 0;
+}
+
+/* Раскрытие секции. Содержимое монтируется по факту, поэтому анимируем
+   только вход — выхода нет, и «прыжок» высоты не нужен компенсировать. */
+@keyframes m3-collapse-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -6px, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.m3-collapse-in {
+  animation: m3-collapse-in var(--md-sys-motion-duration-medium2)
+    var(--md-sys-motion-easing-emphasized-decelerate) both;
+}
+
+.m3-panel__toggle-icon {
+  width: 20px;
+  height: 20px;
+  transition: transform var(--md-sys-motion-duration-medium2)
+    var(--md-sys-motion-spring-fast);
+}
+
+.m3-panel__toggle-icon--collapsed {
+  transform: rotate(-90deg);
+}
+
+/* ══ Поля ввода ════════════════════════════════════════════════════════ */
+.m3-field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 620;
+  letter-spacing: 0.03em;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.m3-field-label > svg {
+  width: 14px;
+  height: 14px;
+}
+
+.m3-field {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: none;
+  border-radius: var(--md-sys-shape-md);
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+  font-size: 14px;
+  line-height: 20px;
+  /* Контур рисуем тенью, а не border: при фокусе он утолщается до 2px,
+     и рамка не сдвигала бы содержимое. */
+  box-shadow: inset 0 0 0 1px var(--md-sys-color-outline-variant);
+  transition:
+    box-shadow var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard),
+    background-color var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard);
+}
+
+.m3-field::placeholder {
+  color: var(--md-sys-color-on-surface-variant);
+  opacity: 0.7;
+}
+
+.m3-field:hover:not(:disabled) {
+  box-shadow: inset 0 0 0 1px var(--md-sys-color-outline);
+}
+
+.m3-field:focus {
+  outline: none;
+  background: var(--md-sys-color-surface-container-lowest);
+  box-shadow: inset 0 0 0 2px var(--md-sys-color-primary);
+}
+
+.m3-field:disabled {
+  opacity: 0.5;
+}
+
+.m3-field--mono {
+  font-family: var(--md-sys-typescale-mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.m3-field--sm {
+  min-height: 36px;
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+textarea.m3-field {
+  resize: vertical;
+}
+
+/* Свой шеврон вместо системного: у `select` нельзя оформить псевдоэлемент,
+   поэтому стрелка — фоновая картинка. Цвет зашит в SVG, потому что в
+   data-URI не работает currentColor — отсюда отдельное правило для тёмной. */
+.m3-select {
+  appearance: none;
+  padding-inline-end: 38px;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%233f4947' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  cursor: pointer;
+}
+
+[data-theme='dark'] .m3-select {
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23bec9c6' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+
+.m3-select option {
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+}
+
+/* ══ Переключатели ═════════════════════════════════════════════════════ */
+.m3-checkbox {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  accent-color: var(--md-sys-color-primary);
+  cursor: pointer;
+}
+
+/* Switch M3: дорожка 52×32, «палец» растёт при включении и при нажатии. */
+.m3-switch {
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: 52px;
+  height: 32px;
+  border-radius: var(--md-sys-shape-full);
+  background: var(--md-sys-color-surface-container-highest);
+  box-shadow: inset 0 0 0 2px var(--md-sys-color-outline);
+  cursor: pointer;
+  transition:
+    background-color var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
+    box-shadow var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+}
+
+.m3-switch::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 6px;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--md-sys-shape-full);
+  background: var(--md-sys-color-outline);
+  transform: translateY(-50%);
+  transition:
+    transform var(--md-sys-motion-duration-medium1) var(--md-sys-motion-spring-default),
+    width var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
+    height var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
+    background-color var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
+    left var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+}
+
+.m3-switch:checked {
+  background: var(--md-sys-color-primary);
+  box-shadow: inset 0 0 0 2px var(--md-sys-color-primary);
+}
+
+.m3-switch:checked::after {
+  width: 24px;
+  height: 24px;
+  left: 2px;
+  background: var(--md-sys-color-on-primary);
+  transform: translate(20px, -50%);
+}
+
+.m3-switch:active::after {
+  width: 28px;
+  height: 28px;
+}
+
+.m3-switch:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+/* Строка «подпись + переключатель». */
+.m3-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: var(--md-sys-shape-md);
+  /* На тон выше подноса, в котором такие строки обычно и лежат: одинаковый
+     фон сливал их в один прямоугольник. */
+  background: var(--md-sys-color-surface-container-high);
+  cursor: pointer;
+  transition: background-color var(--md-sys-motion-duration-short3)
+    var(--md-sys-motion-easing-standard);
+}
+
+.m3-switch-row:hover {
+  background: var(--md-sys-color-surface-container-highest);
+}
+
+/* ══ Chips ═════════════════════════════════════════════════════════════ */
+.m3-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding-inline: 14px;
+  border-radius: var(--md-sys-shape-sm);
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: inset 0 0 0 1px var(--md-sys-color-outline-variant);
+  transition:
+    border-radius var(--md-sys-motion-duration-medium1) var(--md-sys-motion-spring-fast),
+    background-color var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard),
+    box-shadow var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard),
+    color var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard);
+}
+
+.m3-chip > svg {
+  width: 16px;
+  height: 16px;
+}
+
+.m3-chip:active:not(:disabled) {
+  border-radius: var(--md-sys-shape-full);
+}
+
+.m3-chip:disabled {
+  opacity: 0.38;
+}
+
+/* «Вы здесь» — тем же бирюзовым, что и активная крошка пути: раньше одно и
+   то же состояние в двух местах подряд было окрашено по-разному. */
+.m3-chip--selected {
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+  box-shadow: none;
+}
+
+.m3-chip--mono {
+  font-family: var(--md-sys-typescale-mono);
+  font-size: 12px;
+  letter-spacing: 0;
+}
+
+/* Метка-«таблетка» без интерактива. */
+.m3-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding-inline: 11px;
+  border-radius: var(--md-sys-shape-full);
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 11.5px;
+  font-weight: 640;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.m3-badge > svg {
+  width: 14px;
+  height: 14px;
+}
+
+.m3-badge--primary {
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+}
+
+.m3-badge--secondary {
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+}
+
+.m3-badge--error {
+  background: var(--md-sys-color-error-container);
+  color: var(--md-sys-color-on-error-container);
+}
+
+.m3-badge--success {
+  background: var(--md-sys-color-success-container);
+  color: var(--md-sys-color-on-success-container);
+}
+
+/* ══ Списки ════════════════════════════════════════════════════════════ */
+.m3-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: var(--md-sys-shape-md);
+  background: var(--md-sys-color-surface-container);
+  transition:
+    background-color var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard),
+    box-shadow var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard);
+}
+
+.m3-row:hover {
+  background: var(--md-sys-color-surface-container-high);
+  box-shadow: inset 0 0 0 1px var(--md-sys-color-outline-variant);
+}
+
+/* Без этого блок с длинным серийником не мог ужаться и заезжал под кнопки:
+   у flex-элемента min-width по умолчанию равен ширине содержимого. */
+.m3-row > * {
+  min-width: 0;
+}
+
+.m3-row--flat {
+  background: transparent;
+  padding-inline: 12px;
+}
+
+/* Вложенный блок внутри панели — «поднос» под настройки. */
+.m3-tray {
+  border-radius: var(--md-sys-shape-lg);
+  background: var(--md-sys-color-surface-container);
+  padding: 16px;
+}
+
+.m3-tray--outlined {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--md-sys-color-outline-variant);
+}
+
+.m3-divider {
+  height: 1px;
+  border: none;
+  background: var(--md-sys-color-outline-variant);
+}
+
+/* ══ Пустое состояние ══════════════════════════════════════════════════ */
+.m3-empty {
+  display: grid;
+  place-items: center;
+  gap: 10px;
+  padding: 32px 24px;
+  border-radius: var(--md-sys-shape-lg);
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface-variant);
+  text-align: center;
+  font-size: 13.5px;
+}
+
+.m3-empty > svg {
+  width: 40px;
+  height: 40px;
+  opacity: 0.4;
+}
+
+/* ══ Код и вывод команд ════════════════════════════════════════════════ */
+.m3-code {
+  max-height: 380px;
+  overflow: auto;
+  padding: 16px;
+  border-radius: var(--md-sys-shape-md);
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-on-surface);
+  font-family: var(--md-sys-typescale-mono);
+  font-size: 12.5px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+  box-shadow: inset 0 0 0 1px var(--md-sys-color-outline-variant);
+}
+
+/* ══ Индикаторы загрузки ═══════════════════════════════════════════════
+   Кольцо крутится через `transform` — единственное, что здесь анимируется. */
+@keyframes m3-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.m3-spinner {
+  width: 36px;
+  height: 36px;
+  margin: 12px auto;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg,
+      transparent 0deg,
+      color-mix(in srgb, var(--md-sys-color-primary) 25%, transparent) 120deg,
+      var(--md-sys-color-primary) 340deg,
+      transparent 360deg);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+  animation: m3-spin 900ms linear infinite;
+}
+
+.m3-spinner--sm {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+}
+
+/* Линейный индикатор Expressive: бегунок ездит по дорожке translate-ом. */
+@keyframes m3-linear-slide {
+  0% {
+    transform: translateX(-100%) scaleX(0.4);
+  }
+
+  50% {
+    transform: translateX(20%) scaleX(0.75);
+  }
+
+  100% {
+    transform: translateX(220%) scaleX(0.4);
+  }
+}
+
+.m3-linear {
+  position: relative;
+  height: 6px;
+  border-radius: var(--md-sys-shape-full);
+  background: var(--md-sys-color-surface-container-highest);
+  overflow: hidden;
+}
+
+.m3-linear::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--md-sys-color-primary);
+  transform-origin: left center;
+  animation: m3-linear-slide 1.4s var(--md-sys-motion-easing-standard) infinite;
+}
+
+/* Живой индикатор состояния. Пульсирует только когда действительно нужно:
+   бесконечная анимация на каждой странице — это постоянная работа
+   композитора без единого пикселя пользы. */
+.m3-dot {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--md-sys-color-success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--md-sys-color-success) 22%, transparent);
+}
+
+.m3-dot--offline {
+  background: var(--md-sys-color-error);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--md-sys-color-error) 22%, transparent);
+}
+
+.m3-dot--idle {
+  background: var(--md-sys-color-outline);
+  box-shadow: none;
+}
+
+@keyframes m3-pulse {
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.35);
+    opacity: 0.55;
+  }
+}
+
+.m3-dot--live {
+  background: var(--md-sys-color-error);
+  animation: m3-pulse 1.8s var(--md-sys-motion-easing-standard) infinite;
+}
+
+/* ══ Навигация ═════════════════════════════════════════════════════════ */
+.m3-nav {
+  display: flex;
+  flex-direction: column;
+  background: var(--md-sys-color-surface-container-low);
+  border-inline-end: 1px solid var(--md-sys-color-outline-variant);
+}
+
+/* Пункт-«таблетка» M3 drawer. */
+.m3-nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 48px;
+  padding-inline: 16px;
+  border-radius: var(--md-sys-shape-full);
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 14px;
+  font-weight: 620;
+  text-align: start;
+  transition:
+    background-color var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard),
+    color var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard);
+}
+
+.m3-nav-item > svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
+.m3-nav-item--active {
+  /* Индикатор ведём на primary, а не на secondary, как в базовом M3: наш
+     secondary — насыщенная амбра, и в меню она спорит с бирюзой бренда.
+     Амбра остаётся там, где она к месту, — на тональных кнопках. */
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+}
+
+.m3-nav-item--branch {
+  color: var(--md-sys-color-on-surface);
+}
+
+.m3-nav-sub {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 38px;
+  padding-inline: 14px;
+  border-radius: var(--md-sys-shape-full);
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 13px;
+  font-weight: 560;
+  text-align: start;
+  transition:
+    background-color var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard),
+    color var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard);
+}
+
+.m3-nav-sub--active {
+  /* Подпункт — тише родителя: та же бирюза, но заливкой вполсилы. */
+  background: color-mix(in srgb, var(--md-sys-color-primary) 16%, transparent);
+  color: var(--md-sys-color-primary);
+}
+
+/* Свёрнутый рельс: иконка в пилюле-индикаторе и подпись под ней. */
+.m3-rail-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 4px 0 6px;
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 10.5px;
+  font-weight: 640;
+  letter-spacing: 0.02em;
+  transition: color var(--md-sys-motion-duration-short3)
+    var(--md-sys-motion-easing-standard);
+}
+
+.m3-rail-item__indicator {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 32px;
+  border-radius: var(--md-sys-shape-full);
+  transition:
+    background-color var(--md-sys-motion-duration-medium1) var(--md-sys-motion-easing-emphasized),
+    transform var(--md-sys-motion-duration-medium1) var(--md-sys-motion-spring-fast);
+}
+
+.m3-rail-item__indicator > svg {
+  width: 20px;
+  height: 20px;
+}
+
+.m3-rail-item:hover .m3-rail-item__indicator {
+  background: var(--md-sys-color-surface-container-high);
+}
+
+.m3-rail-item--active {
+  color: var(--md-sys-color-on-surface);
+}
+
+.m3-rail-item--active .m3-rail-item__indicator,
+.m3-rail-item--active:hover .m3-rail-item__indicator {
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+}
+
+/* Подсветка шапки: два радиальных пятна, никакого размытия. */
+.app-hero-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(420px 300px at 100% 0%,
+      color-mix(in srgb, var(--md-sys-color-primary) 30%, transparent), transparent 70%),
+    radial-gradient(360px 260px at 0% 115%,
+      color-mix(in srgb, var(--md-sys-color-secondary) 22%, transparent), transparent 70%);
+}
+
+/* ══ Верхняя панель ════════════════════════════════════════════════════ */
+.m3-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: var(--app-topbar-height);
+  padding: 10px var(--app-gutter);
+  background: var(--md-sys-color-surface);
+  border-block-end: 1px solid transparent;
+  transition: border-color var(--md-sys-motion-duration-short4)
+    var(--md-sys-motion-easing-standard),
+    box-shadow var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+}
+
+/* Отрывается от контента только когда страница прокручена — граница
+   появляется, пока лист «уходит» под панель. */
+.m3-topbar--scrolled {
+  border-block-end-color: var(--md-sys-color-outline-variant);
+  box-shadow: var(--md-sys-elevation-1);
+}
+
+/* ══ Диалоги и оверлеи ═════════════════════════════════════════════════
+   Без backdrop-filter: размытие всей подложки — самый дорогой эффект,
+   который можно повесить на полноэкранный слой. */
+.m3-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgb(var(--md-sys-color-scrim) / 0.45);
+}
+
+.m3-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 100%;
+  padding: 26px;
+  border-radius: var(--md-sys-shape-xl-increased);
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+  box-shadow: var(--md-sys-elevation-3);
+}
+
+@keyframes m3-dialog-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.m3-dialog--enter {
+  animation: m3-dialog-in var(--md-sys-motion-duration-medium3)
+    var(--md-sys-motion-spring-default) both;
+}
+
+/* ══ Снекбар ═══════════════════════════════════════════════════════════ */
+@keyframes m3-snackbar-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -14px, 0) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.m3-snackbar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 260px;
+  max-width: 420px;
+  padding: 13px 18px;
+  border-radius: var(--md-sys-shape-md);
+  background: var(--md-sys-color-inverse-surface);
+  color: var(--md-sys-color-inverse-on-surface);
+  font-size: 13.5px;
+  box-shadow: var(--md-sys-elevation-3);
+  overflow: hidden;
+  animation: m3-snackbar-in var(--md-sys-motion-duration-medium2)
+    var(--md-sys-motion-spring-default) both;
+}
+
+.m3-snackbar > svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
+.m3-snackbar--success > svg {
+  color: var(--md-sys-color-success-container);
+}
+
+.m3-snackbar--error > svg {
+  color: var(--md-sys-color-error-container);
+}
+
+@keyframes m3-snackbar-progress {
+  from {
+    transform: scaleX(1);
+  }
+
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.m3-snackbar::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 2px;
+  background: currentColor;
+  opacity: 0.35;
+  transform-origin: left center;
+  animation: m3-snackbar-progress 3s linear both;
+}
+
+/* ══ Подсказка ═════════════════════════════════════════════════════════
+   Появляется по data-атрибуту — ни узла в DOM, ни обработчиков в JS. */
+[data-m3-tip] {
+  position: relative;
+}
+
+[data-m3-tip]::after {
+  content: attr(data-m3-tip);
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  z-index: 200;
+  padding: 6px 10px;
+  border-radius: var(--md-sys-shape-sm);
+  background: var(--md-sys-color-inverse-surface);
+  color: var(--md-sys-color-inverse-on-surface);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(-50%) scale(0.9);
+  transform-origin: left center;
+  pointer-events: none;
+  transition:
+    opacity var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard),
+    transform var(--md-sys-motion-duration-short3) var(--md-sys-motion-spring-fast);
+}
+
+[data-m3-tip]:hover::after,
+[data-m3-tip]:focus-visible::after {
+  opacity: 1;
+  transform: translateY(-50%) scale(1);
+}
+
+/* ══ Помощники производительности ══════════════════════════════════════
+   `content-visibility: auto` разрешает WebView не верстать и не красить то,
+   что сейчас за пределами экрана. На длинных списках файлов и в галерее это
+   разница между «прокрутка идёт» и «прокрутка дёргается».
+   `contain-intrinsic-size` держит высоту скроллбара стабильной. */
+.m3-cv-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 64px;
+}
+
+/* То же для плотных однострочных списков (файловый менеджер). Оценка высоты
+   должна совпадать с реальной, иначе бегунок прокрутки скачет. */
+.m3-cv-line {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 40px;
+}
+
+.m3-cv-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 220px;
+}
+
+/* Медиа в галерее: соотношение сторон резервирует место до загрузки —
+   без него каждая подгруженная плитка перекладывает сетку целиком. */
+.m3-thumb {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  background: var(--md-sys-color-surface-container-high);
+  border-radius: var(--md-sys-shape-md);
+}

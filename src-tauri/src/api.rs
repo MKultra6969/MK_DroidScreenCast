@@ -545,10 +545,9 @@ pub async fn api_files_pull(
 /// Зеркалит `POST /api/files/upload`, но берёт **путь к файлу на диске**.
 ///
 /// Единственное расхождение с REST во всём порту, и оно вынужденное:
-/// HTTP-версия принимает `multipart/form-data`, а через IPC содержимое файла
-/// не передать. В десктопе фронтенд берёт пути через `plugin-dialog` (или из
-/// события перетаскивания) и присылает их сюда; веб-панель продолжает слать
-/// multipart в Python.
+/// HTTP-версия принимала `multipart/form-data`, а через IPC содержимое файла
+/// не передать. Фронтенд берёт пути через `plugin-dialog` (или из события
+/// перетаскивания) и присылает их сюда.
 #[tauri::command]
 pub async fn api_files_upload(
     app: AppHandle,
@@ -829,7 +828,7 @@ fn require_scrcpy(app: &AppHandle) -> Result<PathBuf, ApiError> {
 
 /// Путь к adb или 503 — как `_require_adb()` в Python.
 ///
-/// Пока Python докачивает platform-tools, adb на диске ещё нет. 503 с этим
+/// Пока фоновая задача докачивает platform-tools, adb на диске ещё нет. 503 с этим
 /// текстом фронтенд показывает как «инструменты готовятся», а не как поломку.
 fn require_adb(app: &AppHandle) -> Result<PathBuf, ApiError> {
     tools::adb_path(app).ok_or_else(|| ApiError::new(503, "adb is still being prepared"))
@@ -854,7 +853,6 @@ fn config_summary(config: &Map<String, Value>) -> Value {
     json!({
         "language": config.get("language").cloned().unwrap_or_else(|| json!("en")),
         "presets": config::presets_of(config),
-        "web": section(config, "web"),
         "logs": section(config, "logs"),
         "downloads": section(config, "downloads"),
         "connection_optimizer": section(config, "connection_optimizer"),
@@ -1033,19 +1031,14 @@ mod tests {
 
         assert_eq!(summary["language"], json!("en"));
         assert_eq!(summary["presets"], config::default_presets());
-        assert_eq!(summary["web"]["port"], json!(6969));
         assert_eq!(summary["languages"], json!(["en", "ru"]));
         assert_eq!(summary["version"], json!(env!("CARGO_PKG_VERSION")));
         // Секции уезжают целиком: интерфейс читает из них отдельные поля.
-        for key in [
-            "logs",
-            "downloads",
-            "connection_optimizer",
-            "recording",
-            "web",
-        ] {
+        for key in ["logs", "downloads", "connection_optimizer", "recording"] {
             assert!(summary[key].is_object(), "секция {key} потерялась");
         }
+        // `web` настраивал HTTP-сервер Python-бэкенда — секции больше нет.
+        assert!(summary.get("web").is_none());
         // Конфиг целиком сюда не попадает — за этим есть `/api/config/full`.
         assert!(summary.get("devices").is_none());
         assert!(summary.get("scrcpy").is_none());

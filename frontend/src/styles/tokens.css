@@ -1,0 +1,220 @@
+/*
+ * MD3 + Material 3 Expressive — системные токены.
+ *
+ * Здесь только переменные: цветовые роли, шкала форм, типографика, движение и
+ * высоты. Ни одного селектора компонента — их место в components.css.
+ *
+ * Почему плоский набор `:root`-переменных: WebView парсит CSS один раз при
+ * старте, а вот пересчёт каскада стоит на каждом рендере. Переменные дешевле,
+ * чем вычисляемые цвета в JS или CSS-in-JS.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* ── Типографика ──────────────────────────────────────────────────────
+     Системный стек вместо Google Fonts: страница открывается по file://,
+     и сетевой запрос за шрифтом на старте — это либо задержка, либо
+     таймаут на машине без интернета. */
+  --md-sys-typescale-brand: 'Segoe UI Variable Display', 'SF Pro Display', Inter,
+    Roboto, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --md-sys-typescale-plain: 'Segoe UI Variable Text', 'SF Pro Text', Inter, Roboto,
+    system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --md-sys-typescale-mono: 'Cascadia Code', 'JetBrains Mono', 'SF Mono', Consolas,
+    'Liberation Mono', monospace;
+
+  /* Псевдонимы для tailwind.config (font-ui / font-display). */
+  --font-ui: var(--md-sys-typescale-plain);
+  --font-display: var(--md-sys-typescale-brand);
+
+  /* ── Цветовые роли (light) ────────────────────────────────────────────
+     Тональная палитра построена от бирюзового источника; secondary —
+     тёплая амбра, tertiary — синий. Expressive любит контрастные
+     container-роли, поэтому они насыщеннее классического M3. */
+  --md-sys-color-primary: #006b60;
+  --md-sys-color-on-primary: #ffffff;
+  --md-sys-color-primary-container: #9ef2e4;
+  --md-sys-color-on-primary-container: #00201c;
+
+  --md-sys-color-secondary: #7c5800;
+  --md-sys-color-on-secondary: #ffffff;
+  --md-sys-color-secondary-container: #ffdea6;
+  --md-sys-color-on-secondary-container: #271900;
+
+  --md-sys-color-tertiary: #4a5c92;
+  --md-sys-color-on-tertiary: #ffffff;
+  --md-sys-color-tertiary-container: #dbe1ff;
+  --md-sys-color-on-tertiary-container: #04174b;
+
+  --md-sys-color-error: #ba1a1a;
+  --md-sys-color-on-error: #ffffff;
+  --md-sys-color-error-container: #ffdad6;
+  --md-sys-color-on-error-container: #410002;
+
+  --md-sys-color-success: #16683f;
+  --md-sys-color-on-success: #ffffff;
+  --md-sys-color-success-container: #a4f2c0;
+  --md-sys-color-on-success-container: #002110;
+
+  --md-sys-color-background: #f4fbf8;
+  --md-sys-color-on-background: #161d1b;
+  --md-sys-color-surface: #f4fbf8;
+  --md-sys-color-on-surface: #161d1b;
+  --md-sys-color-surface-dim: #d5dbd9;
+  --md-sys-color-surface-bright: #f4fbf8;
+  --md-sys-color-surface-container-lowest: #ffffff;
+  --md-sys-color-surface-container-low: #eff5f2;
+  --md-sys-color-surface-container: #e9efec;
+  --md-sys-color-surface-container-high: #e3e9e7;
+  --md-sys-color-surface-container-highest: #dde4e1;
+  --md-sys-color-surface-variant: #dae5e1;
+  --md-sys-color-on-surface-variant: #3f4947;
+
+  --md-sys-color-outline: #6f7977;
+  --md-sys-color-outline-variant: #bec9c6;
+
+  --md-sys-color-inverse-surface: #2b3230;
+  --md-sys-color-inverse-on-surface: #ecf2ef;
+  --md-sys-color-inverse-primary: #82d5c8;
+
+  --md-sys-color-shadow: 12 20 18;
+  --md-sys-color-scrim: 0 0 0;
+
+  /* Фон карточки-секции.
+     По рецепту M3 это surface-container-low, но на светлой теме он почти
+     сливается с фоном страницы — карточки переставали читаться как отдельные
+     поверхности. Белый даёт нужный перепад; в тёмной теме рецепт работает как
+     задумано и остаётся как есть. */
+  --md-comp-panel-container: var(--md-sys-color-surface-container-lowest);
+
+  /* ── Тени / elevation ─────────────────────────────────────────────────
+     Пять уровней M3: ключевая тень (узкая, тёмная) плюс ambient
+     (широкая, мягкая). */
+  --md-sys-elevation-0: none;
+  --md-sys-elevation-1: 0 1px 2px rgb(var(--md-sys-color-shadow) / 0.28),
+    0 1px 3px 1px rgb(var(--md-sys-color-shadow) / 0.12);
+  --md-sys-elevation-2: 0 1px 2px rgb(var(--md-sys-color-shadow) / 0.28),
+    0 2px 6px 2px rgb(var(--md-sys-color-shadow) / 0.13);
+  --md-sys-elevation-3: 0 1px 3px rgb(var(--md-sys-color-shadow) / 0.28),
+    0 4px 10px 3px rgb(var(--md-sys-color-shadow) / 0.14);
+  --md-sys-elevation-4: 0 2px 3px rgb(var(--md-sys-color-shadow) / 0.28),
+    0 6px 14px 4px rgb(var(--md-sys-color-shadow) / 0.14);
+  --md-sys-elevation-5: 0 4px 4px rgb(var(--md-sys-color-shadow) / 0.28),
+    0 8px 18px 6px rgb(var(--md-sys-color-shadow) / 0.15);
+
+  /* ── Шкала форм (Expressive: крупнее и разнообразнее классической) ──── */
+  --md-sys-shape-none: 0px;
+  --md-sys-shape-xs: 4px;
+  --md-sys-shape-sm: 8px;
+  --md-sys-shape-md: 12px;
+  --md-sys-shape-lg: 16px;
+  --md-sys-shape-lg-increased: 20px;
+  --md-sys-shape-xl: 28px;
+  --md-sys-shape-xl-increased: 32px;
+  --md-sys-shape-xxl: 48px;
+  --md-sys-shape-full: 999px;
+
+  /* ── Движение ─────────────────────────────────────────────────────────
+     Кривые M3 плюс «пружины» Expressive. Пружина — это овершут: элемент
+     чуть проскакивает цель и возвращается. */
+  --md-sys-motion-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --md-sys-motion-easing-standard-decelerate: cubic-bezier(0, 0, 0, 1);
+  --md-sys-motion-easing-standard-accelerate: cubic-bezier(0.3, 0, 1, 1);
+  --md-sys-motion-easing-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --md-sys-motion-easing-emphasized-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --md-sys-motion-easing-emphasized-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
+  --md-sys-motion-spring-fast: cubic-bezier(0.34, 1.42, 0.64, 1);
+  --md-sys-motion-spring-default: cubic-bezier(0.24, 1.5, 0.5, 1);
+  --md-sys-motion-spring-slow: cubic-bezier(0.2, 1.32, 0.36, 1);
+
+  --md-sys-motion-duration-short1: 50ms;
+  --md-sys-motion-duration-short2: 100ms;
+  --md-sys-motion-duration-short3: 150ms;
+  --md-sys-motion-duration-short4: 200ms;
+  --md-sys-motion-duration-medium1: 250ms;
+  --md-sys-motion-duration-medium2: 300ms;
+  --md-sys-motion-duration-medium3: 350ms;
+  --md-sys-motion-duration-medium4: 400ms;
+  --md-sys-motion-duration-long1: 450ms;
+  --md-sys-motion-duration-long2: 500ms;
+
+  /* ── State layer (прозрачности слоя состояния) ──────────────────────── */
+  --md-sys-state-hover: 0.08;
+  --md-sys-state-focus: 0.1;
+  --md-sys-state-pressed: 0.12;
+
+  /* ── Метрики каркаса ──────────────────────────────────────────────────
+     В px, а не в rem: окно десктопное, масштаб системный, а фиксированные
+     значения избавляют от дрожания сетки при 125 % DPI. */
+  --app-rail-width: 88px;
+  --app-drawer-width: 272px;
+  --app-gutter: 24px;
+  --app-content-max: 1280px;
+  --app-topbar-height: 64px;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --md-sys-color-primary: #82d5c8;
+  --md-sys-color-on-primary: #003731;
+  --md-sys-color-primary-container: #005048;
+  --md-sys-color-on-primary-container: #9ef2e4;
+
+  --md-sys-color-secondary: #f1bf6c;
+  --md-sys-color-on-secondary: #422c00;
+  --md-sys-color-secondary-container: #5e4100;
+  --md-sys-color-on-secondary-container: #ffdea6;
+
+  --md-sys-color-tertiary: #b3c5ff;
+  --md-sys-color-on-tertiary: #182e60;
+  --md-sys-color-tertiary-container: #31447a;
+  --md-sys-color-on-tertiary-container: #dbe1ff;
+
+  --md-sys-color-error: #ffb4ab;
+  --md-sys-color-on-error: #690005;
+  --md-sys-color-error-container: #93000a;
+  --md-sys-color-on-error-container: #ffdad6;
+
+  --md-sys-color-success: #88d6a5;
+  --md-sys-color-on-success: #00391e;
+  --md-sys-color-success-container: #00522d;
+  --md-sys-color-on-success-container: #a4f2c0;
+
+  --md-sys-color-background: #0e1513;
+  --md-sys-color-on-background: #dde4e1;
+  --md-sys-color-surface: #0e1513;
+  --md-sys-color-on-surface: #dde4e1;
+  --md-sys-color-surface-dim: #0e1513;
+  --md-sys-color-surface-bright: #343b39;
+  --md-sys-color-surface-container-lowest: #090f0e;
+  --md-sys-color-surface-container-low: #161d1b;
+  --md-sys-color-surface-container: #1a211f;
+  --md-sys-color-surface-container-high: #252b2a;
+  --md-sys-color-surface-container-highest: #303634;
+  --md-sys-color-surface-variant: #3f4947;
+  --md-sys-color-on-surface-variant: #bec9c6;
+
+  --md-sys-color-outline: #889390;
+  --md-sys-color-outline-variant: #3f4947;
+
+  --md-sys-color-inverse-surface: #dde4e1;
+  --md-sys-color-inverse-on-surface: #2b3230;
+  --md-sys-color-inverse-primary: #006b60;
+
+  --md-sys-color-shadow: 0 0 0;
+
+  --md-comp-panel-container: var(--md-sys-color-surface-container-low);
+
+  /* В тёмной теме тени почти не читаются — они плотнее и шире. */
+  --md-sys-elevation-1: 0 1px 2px rgb(0 0 0 / 0.5), 0 1px 3px 1px rgb(0 0 0 / 0.4);
+  --md-sys-elevation-2: 0 1px 2px rgb(0 0 0 / 0.5), 0 2px 6px 2px rgb(0 0 0 / 0.4);
+  --md-sys-elevation-3: 0 1px 3px rgb(0 0 0 / 0.55), 0 4px 10px 3px rgb(0 0 0 / 0.4);
+  --md-sys-elevation-4: 0 2px 3px rgb(0 0 0 / 0.55), 0 6px 14px 4px rgb(0 0 0 / 0.4);
+  --md-sys-elevation-5: 0 4px 4px rgb(0 0 0 / 0.55), 0 8px 18px 6px rgb(0 0 0 / 0.42);
+
+  /* Тёмная тема гасит цвет — state layer приходится усиливать. */
+  --md-sys-state-hover: 0.1;
+  --md-sys-state-focus: 0.12;
+  --md-sys-state-pressed: 0.16;
+}

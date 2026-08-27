@@ -1,4 +1,4 @@
-import { cn } from '../../utils';
+import { RefreshCw, Smartphone, TriangleAlert } from 'lucide-react';
 
 type BootOverlayProps = {
   ready: boolean;
@@ -11,30 +11,39 @@ export function BootOverlay({ ready, timedOut, onRetry, progress }: BootOverlayP
   if (ready) return null;
 
   return (
-    <div className="boot-overlay fixed inset-0 z-[1500] flex items-center justify-center p-6">
-      <div className="flex w-full max-w-[420px] flex-col items-center gap-3 rounded-[var(--radius-lg)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] p-6 text-center shadow-[var(--shadow-3-soft)]">
-        <div className="loading-spinner" />
-        <h2 className="font-display text-lg font-semibold">Starting MK DroidScreenCast</h2>
-        <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">
-          {timedOut
-            ? 'The background service is taking longer than expected. Make sure it is running.'
-            : 'Connecting to the background service...'}
-        </p>
-        {/* First launch downloads platform-tools and scrcpy; show that instead
-            of an unexplained spinner. */}
-        {!timedOut && progress && (
-          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{progress}</p>
+    <div className="m3-scrim z-[1500] flex items-center justify-center p-6">
+      <div className="m3-dialog m3-dialog--enter max-w-[440px] items-center text-center">
+        <span
+          className={
+            timedOut
+              ? 'grid h-16 w-16 place-items-center rounded-m3lg bg-error-container text-on-error-container'
+              : 'grid h-16 w-16 place-items-center rounded-m3lg bg-primary-container text-on-primary-container'
+          }
+        >
+          {timedOut ? <TriangleAlert className="h-8 w-8" /> : <Smartphone className="h-8 w-8" />}
+        </span>
+
+        <div className="flex flex-col gap-2">
+          <h2 className="m3-title-large">Starting MK DroidScreenCast</h2>
+          <p className="m3-body-medium m3-on-variant">
+            {timedOut
+              ? 'The background service is taking longer than expected. Make sure it is running.'
+              : 'Connecting to the background service…'}
+          </p>
+        </div>
+
+        {/* Первый запуск качает platform-tools и scrcpy — показываем что
+            именно происходит, а не безмолвный кружок. */}
+        {!timedOut && (
+          <div className="flex w-full flex-col gap-3">
+            <div className="m3-linear" />
+            {progress && <p className="m3-body-small m3-on-variant">{progress}</p>}
+          </div>
         )}
+
         {timedOut && (
-          <button
-            className={cn(
-              'mt-2 inline-flex items-center justify-center rounded-full bg-[var(--md-sys-color-primary)] px-4 py-2 text-sm font-semibold text-[var(--md-sys-color-on-primary)]',
-              'shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]',
-              'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-outline)]'
-            )}
-            type="button"
-            onClick={onRetry}
-          >
+          <button className="m3-btn m3-state m3-btn--filled" type="button" onClick={onRetry}>
+            <RefreshCw />
             Retry
           </button>
         )}

@@ -14,9 +14,7 @@ const WIP_SECTIONS = [
 
 export function AutomationPage({ t, activeSection }: AutomationPageProps) {
   const sectionHighlightClass = (sectionId: string) =>
-    activeSection === sectionId
-      ? 'ring-2 ring-[var(--md-sys-color-primary)] ring-offset-2 ring-offset-[var(--md-sys-color-background)]'
-      : '';
+    activeSection === sectionId ? 'm3-panel--active' : '';
 
   const wipBadge = t('automation_wip_badge');
   const wipBody = t('automation_wip_body');
@@ -29,25 +27,24 @@ export function AutomationPage({ t, activeSection }: AutomationPageProps) {
           key={section.id}
           id={section.id}
           className={cn(
-            'reveal flex flex-col gap-3 rounded-[var(--radius-lg)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] shadow-[var(--shadow-1)]',
-            'transition duration-200 ease-out hover:-translate-y-1 hover:shadow-[var(--shadow-2)] hover:border-[var(--accent-border)]',
+            'm3-enter m3-panel',
             sectionHighlightClass(section.id)
           )}
           style={delayStyle(section.delay)}
         >
-          <div className="flex flex-wrap items-center justify-between gap-3 px-6 pb-4 pt-6 text-[var(--md-sys-color-primary)]">
+          <div className="m3-panel__header">
             <div className="flex items-center gap-3">
-              <Sparkles className="h-7 w-7 rounded-[16px] bg-[var(--md-sys-color-primary-container)] p-1.5 text-[var(--md-sys-color-on-primary-container)]" />
-              <h2 className="font-display text-lg font-semibold">
+              <Sparkles className="m3-token" />
+              <h2 className="m3-panel__title">
                 {t(section.titleKey) || section.fallback}
               </h2>
             </div>
-            <span className="inline-flex items-center gap-2 rounded-full bg-[var(--md-sys-color-secondary-container)] px-3 py-1 text-xs font-semibold text-[var(--md-sys-color-on-secondary-container)]">
+            <span className="m3-badge m3-badge--secondary">
               <Lock className="h-4 w-4" />
               {wipBadge}
             </span>
           </div>
-          <div className="flex flex-col gap-2 px-6 pb-6 text-sm text-[var(--md-sys-color-on-surface-variant)]">
+          <div className="m3-panel__body m3-body-medium m3-on-variant">
             <p>{wipBody}</p>
             <p className="text-xs">{wipNote}</p>
           </div>

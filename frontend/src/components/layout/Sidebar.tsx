@@ -1,13 +1,14 @@
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import type { ComponentType } from 'react';
 import {
   ChevronRight,
   Folder,
   Home,
   Menu,
+  Monitor,
   Moon,
-  PanelLeft,
   PanelLeftClose,
+  PanelLeftOpen,
   Settings,
   Smartphone,
   Sun,
@@ -36,14 +37,29 @@ type SidebarProps = {
   themeLabel: string;
 };
 
+type MenuChild = { id: string; label: string };
+
 type MenuItem = {
   id: string;
   icon: ComponentType<{ className?: string }>;
   label: string;
-  children?: { id: string; label: string }[];
+  /** Куда ведёт пункт, если у него нет детей. */
+  target?: string;
+  children?: MenuChild[];
 };
 
-export function Sidebar({
+const THEME_OPTIONS: Array<{
+  value: 'auto' | 'light' | 'dark';
+  icon: ComponentType<{ className?: string }>;
+  labelKey: string;
+  fallback: string;
+}> = [
+  { value: 'auto', icon: Monitor, labelKey: 'theme_system', fallback: 'System' },
+  { value: 'light', icon: Sun, labelKey: 'theme_light', fallback: 'Light' },
+  { value: 'dark', icon: Moon, labelKey: 'theme_dark', fallback: 'Dark' }
+];
+
+function SidebarView({
   t,
   activeSection,
   sidebarOpen,
@@ -61,9 +77,9 @@ export function Sidebar({
   onToggleTheme,
   themeLabel
 }: SidebarProps) {
-  const sidebarMenuItems: MenuItem[] = useMemo(
+  const menuItems: MenuItem[] = useMemo(
     () => [
-      { id: 'home', icon: Home, label: t('menu_home') || 'Home' },
+      { id: 'home', icon: Home, label: t('menu_home') || 'Home', target: 'faq' },
       {
         id: 'devices',
         icon: Smartphone,
@@ -118,136 +134,158 @@ export function Sidebar({
     [t]
   );
 
+  // На рельсе (свёрнутое состояние) раскрывать список некуда, поэтому клик по
+  // группе ведёт на её первый раздел — иначе пункт выглядел бы нерабочим.
+  const primaryTarget = (item: MenuItem) => item.target ?? item.children?.[0]?.id ?? item.id;
+
+  const isItemActive = (item: MenuItem) =>
+    item.children
+      ? item.children.some((child) => child.id === activeSection)
+      : activeSection === (item.target ?? item.id);
+
   return (
     <>
       {sidebarMobileOpen && (
-        <div
-          className="sidebar-overlay fixed inset-0 z-[90] bg-black/50 md:hidden"
-          onClick={onCloseMobile}
-        />
+        <div className="m3-scrim z-[90] md:hidden" onClick={onCloseMobile} />
       )}
 
+      {/* Кнопка вызова меню — только на узком экране. */}
       <button
-        className={cn(
-          'fixed left-4 top-4 z-[95] md:hidden',
-          'inline-flex h-10 w-10 items-center justify-center rounded-full',
-          'border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)]',
-          'shadow-[var(--shadow-1)] transition hover:shadow-[var(--shadow-2)]'
-        )}
+        className="m3-icon-btn m3-state m3-icon-btn--outlined fixed left-4 top-4 z-[95] shadow-e2 md:hidden"
         onClick={onOpenMobile}
-        aria-label="Open menu"
+        aria-label={t('menu_open') || 'Open menu'}
+        type="button"
       >
-        <Menu className="h-5 w-5" />
+        <Menu />
       </button>
 
       <aside
         className={cn(
-          'sidebar fixed left-0 top-0 bottom-0 z-[100] flex flex-col',
-          'border-r border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)]',
-          'transition-all duration-300 ease-out',
-          sidebarOpen ? 'w-[260px]' : 'w-[60px]',
-          'max-md:w-[280px]',
+          'm3-nav fixed inset-y-0 left-0 z-[100]',
+          // Ширину анимируем, а не layout вокруг: панель — отдельный слой,
+          // и её изменение не заставляет пересчитывать содержимое страницы.
+          'transition-[width,transform] duration-medium ease-emphasized',
+          sidebarOpen ? 'w-[var(--app-drawer-width)]' : 'w-[var(--app-rail-width)]',
+          'max-md:w-[288px]',
           sidebarMobileOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full'
         )}
       >
-        <div className="flex items-center justify-between gap-2 border-b border-[var(--md-sys-color-outline-variant)] px-4 py-4">
-          {sidebarOpen && (
-            <div className="flex items-center gap-3 overflow-hidden">
-              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-[12px] bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)]">
+        {/* ── Шапка ───────────────────────────────────────────────────── */}
+        <div
+          className={cn(
+            'flex h-[var(--app-topbar-height)] shrink-0 items-center gap-3 px-4',
+            !sidebarOpen && 'md:justify-center md:px-0'
+          )}
+        >
+          {(sidebarOpen || sidebarMobileOpen) && (
+            <>
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-m3md bg-primary-container text-on-primary-container">
                 <Smartphone className="h-5 w-5" />
-              </div>
-              <span className="truncate font-display text-sm font-semibold">MK DroidScreenCast</span>
-            </div>
+              </span>
+              <span className="m3-title-medium min-w-0 flex-1 truncate">
+                MK DroidScreenCast
+              </span>
+            </>
           )}
 
           <button
-            className={cn(
-              'hidden md:flex h-8 w-8 items-center justify-center rounded-full',
-              'border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)]',
-              'text-[var(--md-sys-color-on-surface-variant)] transition hover:bg-[var(--md-sys-color-surface-container-high)]',
-              !sidebarOpen && 'mx-auto'
-            )}
+            className="m3-icon-btn m3-state hidden md:inline-flex"
             onClick={onToggleSidebar}
             aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+            type="button"
           >
-            {sidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeft className="h-4 w-4" />}
+            {sidebarOpen ? <PanelLeftClose /> : <PanelLeftOpen />}
           </button>
 
           <button
-            className={cn(
-              'md:hidden h-8 w-8 items-center justify-center rounded-full',
-              'border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)]',
-              'text-[var(--md-sys-color-on-surface-variant)]'
-            )}
+            className="m3-icon-btn m3-state md:hidden"
             onClick={onCloseMobile}
             aria-label="Close menu"
+            type="button"
           >
-            <X className="h-4 w-4" />
+            <X />
           </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-3 py-4">
+        {/* ── Навигация ───────────────────────────────────────────────── */}
+        <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
           <ul className="flex flex-col gap-1">
-            {sidebarMenuItems.map((item) => {
-              const IconComponent = item.icon;
-              const hasChildren = item.children && item.children.length > 0;
-              const isExpanded = expandedMenuGroups[item.id];
-              const isActive = !hasChildren && activeSection === item.id;
-              const hasActiveChild = hasChildren && item.children?.some((c) => activeSection === c.id);
+            {menuItems.map((item) => {
+              const Icon = item.icon;
+              const active = isItemActive(item);
+              const expanded = Boolean(expandedMenuGroups[item.id]);
+              const showRail = !sidebarOpen && !sidebarMobileOpen;
+
+              if (showRail) {
+                return (
+                  <li key={item.id} className="md:block hidden">
+                    <button
+                      className={cn(
+                        'm3-rail-item m3-state',
+                        active && 'm3-rail-item--active'
+                      )}
+                      onClick={() => onNavigate(primaryTarget(item))}
+                      type="button"
+                      aria-current={active ? 'page' : undefined}
+                    >
+                      <span className="m3-rail-item__indicator">
+                        <Icon />
+                      </span>
+                      <span className="w-full truncate px-1 text-center" title={item.label}>
+                        {item.label}
+                      </span>
+                    </button>
+                  </li>
+                );
+              }
 
               return (
                 <li key={item.id}>
                   <button
                     className={cn(
-                      'flex w-full items-center gap-3 rounded-[var(--radius-sm)] px-3 py-2.5 text-sm font-medium',
-                      'transition-colors duration-150',
-                      isActive || hasActiveChild
-                        ? 'bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)]'
-                        : 'text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)]',
-                      !sidebarOpen && 'justify-center px-2'
+                      'm3-nav-item m3-state',
+                      active && 'm3-nav-item--active',
+                      !active && item.children && 'm3-nav-item--branch'
                     )}
-                    onClick={() => {
-                      if (hasChildren) {
-                        onToggleMenuGroup(item.id);
-                      } else {
-                        onNavigate(item.id === 'home' ? 'faq' : item.id);
-                      }
-                    }}
-                    title={!sidebarOpen ? item.label : undefined}
+                    onClick={() =>
+                      item.children ? onToggleMenuGroup(item.id) : onNavigate(primaryTarget(item))
+                    }
+                    aria-expanded={item.children ? expanded : undefined}
+                    type="button"
                   >
-                    <IconComponent className="h-5 w-5 shrink-0" />
-                    {sidebarOpen && (
-                      <>
-                        <span className="flex-1 truncate text-left">{item.label}</span>
-                        {hasChildren && (
-                          <ChevronRight
-                            className={cn(
-                              'h-4 w-4 shrink-0 transition-transform duration-200',
-                              isExpanded && 'rotate-90'
-                            )}
-                          />
+                    <Icon />
+                    <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                    {item.children && (
+                      <ChevronRight
+                        className={cn(
+                          'h-4 w-4 shrink-0 transition-transform duration-medium ease-spring-fast',
+                          expanded && 'rotate-90'
                         )}
-                      </>
+                      />
                     )}
                   </button>
 
-                  {hasChildren && sidebarOpen && isExpanded && (
-                    <ul className="mt-1 flex flex-col gap-0.5 pl-6">
-                      {item.children!.map((child) => {
-                        const isChildActive = activeSection === child.id;
+                  {item.children && expanded && (
+                    <ul className="m3-collapse-in mt-1 flex flex-col gap-0.5 pl-4">
+                      {item.children.map((child) => {
+                        const childActive = activeSection === child.id;
                         return (
                           <li key={child.id}>
                             <button
                               className={cn(
-                                'flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-3 py-2 text-xs font-medium',
-                                'transition-colors duration-150',
-                                isChildActive
-                                  ? 'bg-[var(--md-sys-color-secondary-container)] text-[var(--md-sys-color-on-secondary-container)]'
-                                  : 'text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)]'
+                                'm3-nav-sub m3-state',
+                                childActive && 'm3-nav-sub--active'
                               )}
                               onClick={() => onNavigate(child.id)}
+                              type="button"
+                              aria-current={childActive ? 'page' : undefined}
                             >
-                              <span className="h-1.5 w-1.5 rounded-full bg-current opacity-50" />
+                              <span
+                                className={cn(
+                                  'h-1.5 w-1.5 shrink-0 rounded-full bg-current transition-opacity',
+                                  childActive ? 'opacity-100' : 'opacity-45'
+                                )}
+                              />
                               <span className="truncate">{child.label}</span>
                             </button>
                           </li>
@@ -261,37 +299,73 @@ export function Sidebar({
           </ul>
         </nav>
 
-        <div className="border-t border-[var(--md-sys-color-outline-variant)] px-3 py-3">
-          {sidebarOpen ? (
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2 rounded-[var(--radius-sm)] bg-[var(--md-sys-color-surface-container)] px-3 py-2 text-xs">
-                <span className={cn('status-dot h-2 w-2', !wsConnected && 'offline')} />
-                <span className="text-[var(--md-sys-color-on-surface-variant)]">
+        {/* ── Подвал: связь и тема ────────────────────────────────────── */}
+        <div className="shrink-0 border-t border-outline-variant p-3">
+          {sidebarOpen || sidebarMobileOpen ? (
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-2.5 rounded-m3md bg-surface-container px-3 py-2.5">
+                <span className={cn('m3-dot', !wsConnected && 'm3-dot--offline')} />
+                <span className="m3-label-medium m3-on-variant truncate">
                   {wsConnected ? t('status_online') : t('status_offline')}
                 </span>
               </div>
 
-              <select
-                className="w-full rounded-[var(--radius-sm)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-3 py-2 text-xs text-[var(--md-sys-color-on-surface)] focus:outline-none"
-                value={themePreference}
-                onChange={(e) => onThemePreferenceChange(e.target.value as 'auto' | 'light' | 'dark')}
+              {/* Сегментированный переключатель вместо <select>: три состояния
+                  видно сразу, а выбор — одно нажатие вместо двух. */}
+              <div
+                className="m3-btn-group w-full"
+                role="group"
+                aria-label={t('theme_label') || 'Theme'}
               >
-                <option value="auto">{t('theme_system') || 'System'}</option>
-                <option value="light">{t('theme_light') || 'Light'}</option>
-                <option value="dark">{t('theme_dark') || 'Dark'}</option>
-              </select>
+                {THEME_OPTIONS.map((option) => {
+                  const OptionIcon = option.icon;
+                  const selected = themePreference === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      className={cn(
+                        'm3-btn m3-state m3-btn--xs flex-1 px-0',
+                        selected ? 'm3-btn--tonal-primary' : 'm3-btn--outlined'
+                      )}
+                      onClick={() => onThemePreferenceChange(option.value)}
+                      aria-pressed={selected}
+                      title={t(option.labelKey) || option.fallback}
+                      type="button"
+                    >
+                      <OptionIcon />
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           ) : (
-            <button
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] mx-auto"
-              onClick={onToggleTheme}
-              title={themeLabel}
-            >
-              {theme === 'dark' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-            </button>
+            <div className="flex flex-col items-center gap-3">
+              <span
+                className={cn('m3-dot', !wsConnected && 'm3-dot--offline')}
+                title={wsConnected ? t('status_online') : t('status_offline')}
+              />
+              <button
+                className="m3-icon-btn m3-state m3-icon-btn--outlined"
+                onClick={onToggleTheme}
+                title={themeLabel}
+                aria-label={themeLabel}
+                type="button"
+              >
+                {theme === 'dark' ? <Moon /> : <Sun />}
+              </button>
+            </div>
           )}
         </div>
       </aside>
     </>
   );
 }
+
+/**
+ * Меню перерисовывается только когда меняются его собственные пропсы.
+ *
+ * Родитель обновляется часто — тикающий таймер записи, опрос устройств,
+ * прогресс загрузки, — и без memo вся эта навигация пересобиралась бы
+ * несколько раз в секунду впустую.
+ */
+export const Sidebar = memo(SidebarView);

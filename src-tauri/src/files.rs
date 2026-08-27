@@ -613,10 +613,9 @@ pub async fn pull(
 /// содержимое файла.
 ///
 /// Это единственное место порта, где контракт REST не повторён дословно.
-/// Причина в транспорте: HTTP-версия принимает `multipart/form-data` из
-/// `<input type=file>`, а через IPC содержимое файла не передать — фронтенд в
-/// десктопе берёт путь через `@tauri-apps/plugin-dialog` и отдаёт его сюда.
-/// Веб-панель продолжает слать multipart в Python.
+/// Причина в транспорте: HTTP-версия принимала `multipart/form-data` из
+/// `<input type=file>`, а через IPC содержимое файла не передать — фронтенд
+/// берёт путь через `@tauri-apps/plugin-dialog` и отдаёт его сюда.
 pub async fn upload(
     adb: &Path,
     source: &Path,

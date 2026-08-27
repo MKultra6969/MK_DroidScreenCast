@@ -147,17 +147,10 @@ export function HomePage({
   const sectionToggleLabel = (collapsed: boolean) =>
     collapsed ? 'Expand section' : 'Collapse section';
   const sectionHighlightClass = (sectionId: string) =>
-    activeSection === sectionId
-      ? 'ring-2 ring-[var(--md-sys-color-primary)] ring-offset-2 ring-offset-[var(--md-sys-color-background)]'
-      : '';
-  const sectionToggleClassName = cn(
-    'inline-flex items-center justify-center rounded-full border border-[var(--md-sys-color-outline-variant)] p-1.5',
-    'bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface-variant)]',
-    'shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]',
-    'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-outline)]'
-  );
+    activeSection === sectionId ? 'm3-panel--active' : '';
+  const sectionToggleClassName = 'm3-icon-btn m3-state m3-icon-btn--sm m3-icon-btn--outlined';
   const sectionToggleIconClass = (collapsed: boolean) =>
-    cn('h-4 w-4 transition-transform', collapsed ? '-rotate-90' : 'rotate-0');
+    cn('m3-panel__toggle-icon', collapsed && 'm3-panel__toggle-icon--collapsed');
   const faqCollapsed = isSectionCollapsed('faq');
   const recordingCollapsed = isSectionCollapsed('recording');
   const activeDevicesCollapsed = isSectionCollapsed('active-devices');
@@ -175,16 +168,15 @@ export function HomePage({
                 <section
                   id="faq"
                   className={cn(
-                    'reveal flex flex-col gap-3 rounded-[30px] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] shadow-[var(--shadow-1)]',
-                    'transition duration-200 ease-out hover:-translate-y-1 hover:shadow-[var(--shadow-2)] hover:border-[var(--accent-border)]',
+                    'm3-enter m3-panel',
                     sectionHighlightClass('faq')
                   )}
                   style={delayStyle(80)}
                 >
-              <div className="flex flex-wrap items-center justify-between gap-3 px-6 pb-4 pt-6 text-[var(--md-sys-color-primary)]">
+              <div className="m3-panel__header">
                 <div className="flex items-center gap-3">
-                  <Sparkles className="h-7 w-7 rounded-[16px] bg-[var(--md-sys-color-primary-container)] p-1.5 text-[var(--md-sys-color-on-primary-container)]" />
-                  <h2 className="font-display text-lg font-semibold">{t('section_faq')}</h2>
+                  <Sparkles className="m3-token" />
+                  <h2 className="m3-panel__title">{t('section_faq')}</h2>
                 </div>
                 <button
                   className={sectionToggleClassName}
@@ -199,8 +191,8 @@ export function HomePage({
                 </button>
               </div>
               {!faqCollapsed && (
-                <div className="flex flex-col gap-3 px-6 pb-6" id={sectionContentId('faq')}>
-                  <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">{t('faq_intro')}</p>
+                <div className="m3-panel__body" id={sectionContentId('faq')}>
+                  <p className="m3-body-medium m3-on-variant">{t('faq_intro')}</p>
                   <div className="grid gap-3">
                     {[
                       { title: t('faq_step1_title'), body: t('faq_step1_body'), open: true },
@@ -211,21 +203,18 @@ export function HomePage({
                       <details
                         key={item.title}
                         open={item.open}
-                        className={cn(
-                          'group rounded-[var(--radius-md)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-4 py-3',
-                          'transition duration-200 ease-out open:-translate-y-0.5 open:shadow-[var(--shadow-1)]'
-                        )}
+                        className="group m3-tray"
                       >
                         <summary
                           className={cn(
-                            'flex cursor-pointer list-none items-center justify-between font-semibold text-[var(--md-sys-color-on-surface)]',
-                            "after:content-['+'] after:text-lg after:text-[var(--md-sys-color-primary)]",
+                            'flex cursor-pointer list-none items-center justify-between font-semibold text-on-surface',
+                            "after:content-['+'] after:text-lg after:text-primary",
                             'group-open:after:rotate-45 group-open:after:transition-transform'
                           )}
                         >
                           {item.title}
                         </summary>
-                        <p className="mt-2 text-sm text-[var(--md-sys-color-on-surface-variant)]">{item.body}</p>
+                        <p className="mt-2 m3-body-medium m3-on-variant">{item.body}</p>
                       </details>
                     ))}
                   </div>
@@ -236,30 +225,29 @@ export function HomePage({
             <section
               id="recording"
               className={cn(
-                'reveal flex flex-col gap-3 rounded-[30px] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] shadow-[var(--shadow-1)]',
-                'transition duration-200 ease-out hover:-translate-y-1 hover:shadow-[var(--shadow-2)] hover:border-[var(--accent-border)]',
+                'm3-enter m3-panel',
                 sectionHighlightClass('recording')
               )}
               style={delayStyle(500)}
             >
-              <div className="flex flex-wrap items-center gap-3 px-6 pb-4 pt-6 text-[var(--md-sys-color-primary)]">
-                <Video className="h-7 w-7 rounded-[16px] bg-[var(--md-sys-color-primary-container)] p-1.5 text-[var(--md-sys-color-on-primary-container)]" />
+              <div className="m3-panel__header">
+                <Video className="m3-token" />
                 <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-3">
-                  <h2 className="font-display text-lg font-semibold">{t('section_recording')}</h2>
+                  <h2 className="m3-panel__title">{t('section_recording')}</h2>
                   <span
                     className={cn(
-                      'inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold',
+                      'm3-badge',
                       recordingStatus?.active
-                        ? 'bg-[var(--md-sys-color-error-container)] text-[var(--md-sys-color-on-surface)]'
-                        : 'bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface-variant)]'
+                        ? 'm3-badge--error'
+                        : ''
                     )}
                   >
                     <span
                       className={cn(
                         'h-2 w-2 rounded-full',
                         recordingStatus?.active
-                          ? 'bg-[var(--md-sys-color-error)]'
-                          : 'bg-[var(--md-sys-color-outline)]'
+                          ? 'bg-error'
+                          : 'bg-outline'
                       )}
                     />
                     {recordingStatus?.active ? t('recording_status_active') : t('recording_status_idle')}
@@ -278,15 +266,15 @@ export function HomePage({
                 </button>
               </div>
               {!recordingCollapsed && (
-                <div className="flex flex-col gap-4 px-6 pb-6" id={sectionContentId('recording')}>
-                  <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">{t('recording_note')}</p>
+                <div className="m3-panel__body" id={sectionContentId('recording')}>
+                  <p className="m3-body-medium m3-on-variant">{t('recording_note')}</p>
                   <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(200px,1fr))]">
                     <div className="flex flex-col gap-2">
-                      <label className="text-xs font-semibold tracking-wide text-[var(--md-sys-color-on-surface-variant)]">
+                      <label className="m3-field-label">
                         {t('recording_format_label')}
                       </label>
                       <select
-                        className="w-full rounded-[var(--radius-sm)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-3 py-2 text-sm text-[var(--md-sys-color-on-surface)] focus:border-[var(--md-sys-color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)]"
+                        className="m3-field m3-select"
                         value={form.recordingFormat}
                         onChange={(event) => updateForm('recordingFormat', event.target.value)}
                       >
@@ -295,12 +283,12 @@ export function HomePage({
                       </select>
                     </div>
                     <div className="flex flex-col gap-2">
-                      <label className="inline-flex items-center gap-2 text-xs font-semibold tracking-wide text-[var(--md-sys-color-on-surface-variant)]">
+                      <label className="m3-field-label">
                         <Mic className="h-3.5 w-3.5" />
                         {t('recording_audio_label')}
                       </label>
                       <select
-                        className="w-full rounded-[var(--radius-sm)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-3 py-2 text-sm text-[var(--md-sys-color-on-surface)] focus:border-[var(--md-sys-color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)]"
+                        className="m3-field m3-select"
                         value={form.recordingAudioSource}
                         onChange={(event) => updateForm('recordingAudioSource', event.target.value)}
                       >
@@ -310,11 +298,11 @@ export function HomePage({
                       </select>
                     </div>
                     <div className="flex flex-col gap-2">
-                      <label className="text-xs font-semibold tracking-wide text-[var(--md-sys-color-on-surface-variant)]">
+                      <label className="m3-field-label">
                         {t('recording_connection_label')}
                       </label>
                       <select
-                        className="w-full rounded-[var(--radius-sm)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-3 py-2 text-sm text-[var(--md-sys-color-on-surface)] focus:border-[var(--md-sys-color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)]"
+                        className="m3-field m3-select"
                         value={form.recordingConnection}
                         onChange={(event) => updateForm('recordingConnection', event.target.value)}
                       >
@@ -324,11 +312,11 @@ export function HomePage({
                       </select>
                     </div>
                     <div className="flex flex-col gap-2">
-                      <label className="text-xs font-semibold tracking-wide text-[var(--md-sys-color-on-surface-variant)]">
+                      <label className="m3-field-label">
                         {t('recording_device_label')}
                       </label>
                       <select
-                        className="w-full rounded-[var(--radius-sm)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-3 py-2 text-sm text-[var(--md-sys-color-on-surface)] focus:border-[var(--md-sys-color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)]"
+                        className="m3-field m3-select"
                         value={form.recordingDevice}
                         onChange={(event) => updateForm('recordingDevice', event.target.value)}
                       >
@@ -344,22 +332,22 @@ export function HomePage({
 
                   <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
                     <div className="flex flex-col gap-2">
-                      <label className="text-xs font-semibold tracking-wide text-[var(--md-sys-color-on-surface-variant)]">
+                      <label className="m3-field-label">
                         {t('recording_file_prefix_label')}
                       </label>
                       <input
-                        className="w-full rounded-[var(--radius-sm)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-3 py-2 text-sm text-[var(--md-sys-color-on-surface)] transition focus:border-[var(--md-sys-color-primary)] focus:bg-[var(--md-sys-color-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)]"
+                        className="m3-field"
                         value={form.recordingFilePrefix}
                         onChange={(event) => updateForm('recordingFilePrefix', event.target.value)}
                         placeholder={t('recording_file_prefix_placeholder')}
                       />
                     </div>
                     <div className="flex flex-col gap-2">
-                      <label className="text-xs font-semibold tracking-wide text-[var(--md-sys-color-on-surface-variant)]">
+                      <label className="m3-field-label">
                         {t('recording_output_label')}
                       </label>
                       <input
-                        className="w-full rounded-[var(--radius-sm)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-3 py-2 text-sm text-[var(--md-sys-color-on-surface)] transition focus:border-[var(--md-sys-color-primary)] focus:bg-[var(--md-sys-color-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)]"
+                        className="m3-field"
                         value={form.recordingOutputDir}
                         onChange={(event) => updateForm('recordingOutputDir', event.target.value)}
                         placeholder={t('recording_output_placeholder')}
@@ -369,11 +357,7 @@ export function HomePage({
 
                   <div className="flex flex-wrap items-center gap-2">
                     <button
-                      className={cn(
-                        'inline-flex items-center gap-2 rounded-full border border-[var(--md-sys-color-outline-variant)] px-4 py-2 text-sm font-semibold',
-                        'bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]',
-                        'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-outline)]'
-                      )}
+                      className="m3-btn m3-state m3-btn--outlined m3-btn--sm"
                       type="button"
                       onClick={() => void selectRecordingDir()}
                     >
@@ -381,11 +365,7 @@ export function HomePage({
                       {t('recording_output_choose')}
                     </button>
                     <button
-                      className={cn(
-                        'inline-flex items-center gap-2 rounded-full border border-transparent bg-[var(--md-sys-color-secondary-container)] px-4 py-2 text-sm font-semibold',
-                        'text-[var(--button-secondary-text)] shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]',
-                        'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-outline)]'
-                      )}
+                      className="m3-btn m3-state m3-btn--tonal m3-btn--sm"
                       type="button"
                       onClick={() => void saveRecordingDefaults()}
                       disabled={recordingSaving}
@@ -395,16 +375,16 @@ export function HomePage({
                     </button>
                   </div>
 
-                  <div className="rounded-[var(--radius-md)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-4 py-3">
-                    <span className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)]">
+                  <div className="m3-tray">
+                    <span className="m3-label-medium m3-on-variant">
                       {t('recording_preview_label')}
                     </span>
-                    <p className="mt-1 truncate text-xs text-[var(--md-sys-color-on-surface)]">
+                    <p className="mt-1 truncate text-xs text-on-surface">
                       {recordingPreviewPath}
                     </p>
                   </div>
 
-                  <div className="grid gap-3 rounded-[var(--radius-md)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] p-4 [grid-template-columns:repeat(auto-fit,minmax(200px,1fr))]">
+                  <div className="m3-tray grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(200px,1fr))]">
                     {[
                       { key: 'recordingShowPreview', label: t('recording_show_preview') },
                       { key: 'recordingStayAwake', label: t('recording_stay_awake') },
@@ -413,11 +393,11 @@ export function HomePage({
                     ].map((item) => (
                       <label
                         key={item.key}
-                        className="flex items-center gap-2 rounded-full border border-transparent bg-[var(--md-sys-color-surface-container-low)] px-3 py-2 text-sm text-[var(--md-sys-color-on-surface)] transition hover:border-[var(--md-sys-color-outline)]"
+                        className="m3-switch-row justify-start"
                       >
                         <input
                           type="checkbox"
-                          className="h-4 w-4 accent-[var(--md-sys-color-primary)]"
+                          className="m3-checkbox"
                           checked={form[item.key as keyof FormState] as boolean}
                           onChange={(event) => updateForm(item.key as keyof FormState, event.target.checked)}
                         />
@@ -426,17 +406,13 @@ export function HomePage({
                     ))}
                   </div>
 
-                  <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                  <p className="m3-body-small m3-on-variant">
                     {t('recording_quality_note')}
                   </p>
 
                   <div className="flex flex-wrap gap-3">
                     <button
-                      className={cn(
-                        'inline-flex items-center gap-2 rounded-full bg-[var(--md-sys-color-primary)] px-5 py-2.5 text-sm font-semibold text-[var(--md-sys-color-on-primary)]',
-                        'shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]',
-                        'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-outline)]'
-                      )}
+                      className="m3-btn m3-state m3-btn--filled"
                       onClick={() => void startRecording()}
                       disabled={recordingStatus?.active || recordingLoading}
                     >
@@ -444,11 +420,7 @@ export function HomePage({
                       {t('recording_start_button')}
                     </button>
                     <button
-                      className={cn(
-                        'inline-flex items-center gap-2 rounded-full bg-[var(--md-sys-color-error)] px-5 py-2.5 text-sm font-semibold text-white',
-                        'shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]',
-                        'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[rgba(180,35,24,0.35)]'
-                      )}
+                      className="m3-btn m3-state m3-btn--danger"
                       onClick={() => void stopRecording()}
                       disabled={!recordingStatus?.active || recordingLoading}
                     >
@@ -464,16 +436,15 @@ export function HomePage({
               <article
                 id="active-devices"
                 className={cn(
-                  'reveal flex flex-col gap-3 rounded-[var(--radius-lg)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] shadow-[var(--shadow-1)]',
-                  'transition duration-200 ease-out hover:-translate-y-1 hover:shadow-[var(--shadow-2)] hover:border-[var(--accent-border)] focus-within:-translate-y-0.5 focus-within:shadow-[var(--shadow-2)] focus-within:border-[var(--accent-border-strong)]',
+                  'm3-enter m3-panel',
                   sectionHighlightClass('active-devices')
                 )}
                 style={delayStyle(140)}
               >
-                <div className="flex flex-wrap items-center justify-between gap-3 px-6 pb-4 pt-6 text-[var(--md-sys-color-primary)]">
+                <div className="m3-panel__header">
                   <div className="flex items-center gap-3">
-                    <Activity className="h-7 w-7 rounded-[16px] bg-[var(--md-sys-color-primary-container)] p-1.5 text-[var(--md-sys-color-on-primary-container)]" />
-                    <h2 className="font-display text-lg font-semibold">{t('section_active_devices')}</h2>
+                    <Activity className="m3-token" />
+                    <h2 className="m3-panel__title">{t('section_active_devices')}</h2>
                   </div>
                   <button
                     className={sectionToggleClassName}
@@ -488,11 +459,11 @@ export function HomePage({
                   </button>
                 </div>
                 {!activeDevicesCollapsed && (
-                  <div className="flex flex-1 flex-col gap-3 px-6 pb-6" id={sectionContentId('active-devices')}>
+                  <div className="m3-panel__body flex-1" id={sectionContentId('active-devices')}>
                     {devicesLoading ? (
-                      <div className="loading-spinner" />
+                      <div className="m3-spinner" />
                     ) : activeDevices.length === 0 ? (
-                      <div className="grid place-items-center gap-2 rounded-[var(--radius-md)] border border-dashed border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] p-6 text-center text-sm text-[var(--md-sys-color-on-surface-variant)]">
+                      <div className="m3-empty">
                         <PhoneOff className="h-12 w-12 opacity-30" />
                         <p>{t('active_empty')}</p>
                       </div>
@@ -503,31 +474,23 @@ export function HomePage({
                           return (
                             <div
                               key={device.serial}
-                              className={cn(
-                                'flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[var(--md-sys-color-outline-variant)]',
-                                'bg-[var(--md-sys-color-surface-container-low)] px-4 py-3 shadow-[var(--shadow-1)] transition duration-200 ease-out',
-                                'hover:-translate-y-0.5 hover:shadow-[var(--shadow-1)]'
-                              )}
+                              className="m3-row m3-cv-row"
                             >
                               <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2 font-semibold">
+                                <div className="flex min-w-0 items-center gap-2 font-semibold">
                                   {isWifi ? (
-                                    <Wifi className="h-4 w-4 text-[var(--md-sys-color-primary)]" />
+                                    <Wifi className="h-4 w-4 shrink-0 text-primary" />
                                   ) : (
-                                    <Usb className="h-4 w-4 text-[var(--md-sys-color-primary)]" />
+                                    <Usb className="h-4 w-4 shrink-0 text-primary" />
                                   )}
-                                  <span className="break-words">{device.serial}</span>
+                                  <span className="truncate" title={device.serial}>{device.serial}</span>
                                 </div>
-                                <div className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{device.status}</div>
+                                <div className="m3-body-small m3-on-variant">{device.status}</div>
                               </div>
                               <div className="flex flex-wrap items-center gap-2">
                                 {isWifi && (
                                   <button
-                                    className={cn(
-                                      'inline-flex items-center gap-2 rounded-full border border-transparent bg-[var(--md-sys-color-secondary-container)] px-3 py-1.5 text-xs font-semibold',
-                                      'text-[var(--button-secondary-text)] shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]',
-                                      'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-outline)]'
-                                    )}
+                                    className="m3-btn m3-state m3-btn--tonal m3-btn--xs"
                                     onClick={() => fillSaveDeviceForm(device.serial)}
                                   >
                                     <Save className="h-4 w-4" />
@@ -535,11 +498,7 @@ export function HomePage({
                                   </button>
                                 )}
                                 <button
-                                  className={cn(
-                                    'inline-flex items-center gap-2 rounded-full bg-[var(--md-sys-color-error)] px-3 py-1.5 text-xs font-semibold text-white',
-                                    'shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]',
-                                    'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[rgba(180,35,24,0.35)]'
-                                  )}
+                                  className="m3-btn m3-state m3-btn--danger m3-btn--xs"
                                   onClick={() => void disconnectDevice(device.serial)}
                                 >
                                   <PowerOff className="h-4 w-4" />
@@ -557,16 +516,15 @@ export function HomePage({
               <article
                 id="saved-devices"
                 className={cn(
-                  'reveal flex flex-col gap-3 rounded-[var(--radius-lg)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] shadow-[var(--shadow-1)]',
-                  'transition duration-200 ease-out hover:-translate-y-1 hover:shadow-[var(--shadow-2)] hover:border-[var(--accent-border)] focus-within:-translate-y-0.5 focus-within:shadow-[var(--shadow-2)] focus-within:border-[var(--accent-border-strong)]',
+                  'm3-enter m3-panel',
                   sectionHighlightClass('saved-devices')
                 )}
                 style={delayStyle(200)}
               >
-                <div className="flex flex-wrap items-center justify-between gap-3 px-6 pb-4 pt-6 text-[var(--md-sys-color-primary)]">
+                <div className="m3-panel__header">
                   <div className="flex items-center gap-3">
-                    <Save className="h-7 w-7 rounded-[16px] bg-[var(--md-sys-color-primary-container)] p-1.5 text-[var(--md-sys-color-on-primary-container)]" />
-                    <h2 className="font-display text-lg font-semibold">{t('section_saved_devices')}</h2>
+                    <Save className="m3-token" />
+                    <h2 className="m3-panel__title">{t('section_saved_devices')}</h2>
                   </div>
                   <button
                     className={sectionToggleClassName}
@@ -581,14 +539,14 @@ export function HomePage({
                   </button>
                 </div>
                 {!savedDevicesCollapsed && (
-                  <div className="flex flex-col gap-4 px-6 pb-6" id={sectionContentId('saved-devices')}>
+                  <div className="m3-panel__body" id={sectionContentId('saved-devices')}>
                     <div className="flex flex-col gap-2">
-                      <label className="text-xs font-semibold tracking-wide text-[var(--md-sys-color-on-surface-variant)]">
+                      <label className="m3-field-label">
                         {t('device_save_name_label')}
                       </label>
                       <input
                         ref={saveNameRef}
-                        className="w-full rounded-[var(--radius-sm)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-3 py-2 text-sm text-[var(--md-sys-color-on-surface)] transition focus:border-[var(--md-sys-color-primary)] focus:bg-[var(--md-sys-color-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)]"
+                        className="m3-field"
                         value={form.saveDeviceName}
                         onChange={(event) => updateForm('saveDeviceName', event.target.value)}
                         placeholder={t('device_save_name_placeholder')}
@@ -596,33 +554,29 @@ export function HomePage({
                     </div>
                     <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(200px,1fr))]">
                       <div className="flex flex-col gap-2">
-                        <label className="text-xs font-semibold tracking-wide text-[var(--md-sys-color-on-surface-variant)]">
+                        <label className="m3-field-label">
                           {t('device_save_ip_label')}
                         </label>
                         <input
-                          className="w-full rounded-[var(--radius-sm)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-3 py-2 text-sm text-[var(--md-sys-color-on-surface)] transition focus:border-[var(--md-sys-color-primary)] focus:bg-[var(--md-sys-color-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)]"
+                          className="m3-field"
                           value={form.saveDeviceIp}
                           onChange={(event) => updateForm('saveDeviceIp', event.target.value)}
                           placeholder="192.168.1.100"
                         />
                       </div>
                       <div className="flex flex-col gap-2">
-                        <label className="text-xs font-semibold tracking-wide text-[var(--md-sys-color-on-surface-variant)]">
+                        <label className="m3-field-label">
                           {t('device_save_port_label')}
                         </label>
                         <input
-                          className="w-full rounded-[var(--radius-sm)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-3 py-2 text-sm text-[var(--md-sys-color-on-surface)] transition focus:border-[var(--md-sys-color-primary)] focus:bg-[var(--md-sys-color-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)]"
+                          className="m3-field"
                           value={form.saveDevicePort}
                           onChange={(event) => updateForm('saveDevicePort', event.target.value)}
                         />
                       </div>
                     </div>
                     <button
-                      className={cn(
-                        'inline-flex items-center gap-2 rounded-full border border-transparent bg-[var(--md-sys-color-secondary-container)] px-4 py-2 text-sm font-semibold',
-                        'text-[var(--button-secondary-text)] shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]',
-                        'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-outline)]'
-                      )}
+                      className="m3-btn m3-state m3-btn--tonal m3-btn--sm"
                       onClick={() => void saveDeviceFromForm()}
                     >
                       <Save className="h-4 w-4" />
@@ -630,9 +584,9 @@ export function HomePage({
                     </button>
                     <div>
                       {savedLoading ? (
-                        <div className="loading-spinner" />
+                        <div className="m3-spinner" />
                       ) : savedDevices.length === 0 ? (
-                        <div className="grid place-items-center gap-2 rounded-[var(--radius-md)] border border-dashed border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] p-6 text-center text-sm text-[var(--md-sys-color-on-surface-variant)]">
+                        <div className="m3-empty">
                           <SaveOff className="h-12 w-12 opacity-30" />
                           <p>{t('saved_empty')}</p>
                         </div>
@@ -641,42 +595,31 @@ export function HomePage({
                           {savedDevices.map((device) => (
                             <div
                               key={`${device.ip}:${device.port}`}
-                              className={cn(
-                                'flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[var(--md-sys-color-outline-variant)]',
-                                'bg-[var(--md-sys-color-surface-container-low)] px-4 py-3 transition duration-200 ease-out'
-                              )}
+                              className="m3-row m3-cv-row"
                             >
                               <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2 font-semibold">
+                                <div className="flex min-w-0 items-center gap-2 font-semibold">
                                   {device.connection_type === 'wifi' ? (
-                                    <Wifi className="h-4 w-4 text-[var(--md-sys-color-primary)]" />
+                                    <Wifi className="h-4 w-4 shrink-0 text-primary" />
                                   ) : (
-                                    <Usb className="h-4 w-4 text-[var(--md-sys-color-primary)]" />
+                                    <Usb className="h-4 w-4 shrink-0 text-primary" />
                                   )}
-                                  <span className="break-words">{device.name}</span>
+                                  <span className="truncate" title={device.name}>{device.name}</span>
                                 </div>
-                                <div className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                                <div className="m3-body-small m3-on-variant">
                                   {device.ip}:{device.port}
                                 </div>
                               </div>
                               <div className="flex flex-wrap items-center gap-2">
                                 <button
-                                  className={cn(
-                                    'inline-flex items-center gap-2 rounded-full bg-[var(--md-sys-color-primary)] px-3 py-1.5 text-xs font-semibold text-[var(--md-sys-color-on-primary)]',
-                                    'shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]',
-                                    'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-outline)]'
-                                  )}
+                                  className="m3-btn m3-state m3-btn--filled m3-btn--xs"
                                   onClick={() => void connectSaved(`${device.ip}:${device.port}`)}
                                 >
                                   <Zap className="h-4 w-4" />
                                   {t('device_connect')}
                                 </button>
                                 <button
-                                  className={cn(
-                                    'inline-flex items-center gap-2 rounded-full bg-[var(--md-sys-color-error)] px-3 py-1.5 text-xs font-semibold text-white',
-                                    'shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]',
-                                    'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[rgba(180,35,24,0.35)]'
-                                  )}
+                                  className="m3-btn m3-state m3-btn--danger m3-btn--xs"
                                   onClick={() => void deleteSaved(device.ip, device.port)}
                                 >
                                   <Trash2 className="h-4 w-4" />
@@ -694,16 +637,15 @@ export function HomePage({
               <article
                 id="quick-connect"
                 className={cn(
-                  'reveal flex flex-col gap-3 rounded-[var(--radius-lg)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] shadow-[var(--shadow-1)]',
-                  'transition duration-200 ease-out hover:-translate-y-1 hover:shadow-[var(--shadow-2)] hover:border-[var(--accent-border)] focus-within:-translate-y-0.5 focus-within:shadow-[var(--shadow-2)] focus-within:border-[var(--accent-border-strong)]',
+                  'm3-enter m3-panel',
                   sectionHighlightClass('quick-connect')
                 )}
                 style={delayStyle(260)}
               >
-                <div className="flex flex-wrap items-center justify-between gap-3 px-6 pb-4 pt-6 text-[var(--md-sys-color-primary)]">
+                <div className="m3-panel__header">
                   <div className="flex items-center gap-3">
-                    <PlugZap className="h-7 w-7 rounded-[16px] bg-[var(--md-sys-color-primary-container)] p-1.5 text-[var(--md-sys-color-on-primary-container)]" />
-                    <h2 className="font-display text-lg font-semibold">{t('section_quick_connect')}</h2>
+                    <PlugZap className="m3-token" />
+                    <h2 className="m3-panel__title">{t('section_quick_connect')}</h2>
                   </div>
                   <button
                     className={sectionToggleClassName}
@@ -718,13 +660,13 @@ export function HomePage({
                   </button>
                 </div>
                 {!quickConnectCollapsed && (
-                  <div className="flex flex-col gap-4 px-6 pb-6" id={sectionContentId('quick-connect')}>
+                  <div className="m3-panel__body" id={sectionContentId('quick-connect')}>
                     <div className="flex flex-col gap-2">
-                      <label className="text-xs font-semibold tracking-wide text-[var(--md-sys-color-on-surface-variant)]">
+                      <label className="m3-field-label">
                         {t('quick_connect_label')}
                       </label>
                       <input
-                        className="w-full rounded-[var(--radius-sm)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-3 py-2 text-sm text-[var(--md-sys-color-on-surface)] transition focus:border-[var(--md-sys-color-primary)] focus:bg-[var(--md-sys-color-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)]"
+                        className="m3-field"
                         value={form.quickConnectAddress}
                         onChange={(event) => updateForm('quickConnectAddress', event.target.value)}
                         placeholder={t('quick_connect_placeholder')}
@@ -736,11 +678,7 @@ export function HomePage({
                       />
                     </div>
                     <button
-                      className={cn(
-                        'inline-flex items-center gap-2 rounded-full bg-[var(--md-sys-color-primary)] px-4 py-2 text-sm font-semibold text-[var(--md-sys-color-on-primary)]',
-                        'shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]',
-                        'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-outline)]'
-                      )}
+                      className="m3-btn m3-state m3-btn--filled m3-btn--sm"
                       onClick={() => void quickConnect()}
                     >
                       <PlugZap className="h-4 w-4" />
@@ -753,16 +691,15 @@ export function HomePage({
               <article
                 id="pairing"
                 className={cn(
-                  'reveal flex flex-col gap-3 rounded-[var(--radius-lg)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] shadow-[var(--shadow-1)]',
-                  'transition duration-200 ease-out hover:-translate-y-1 hover:shadow-[var(--shadow-2)] hover:border-[var(--accent-border)] focus-within:-translate-y-0.5 focus-within:shadow-[var(--shadow-2)] focus-within:border-[var(--accent-border-strong)]',
+                  'm3-enter m3-panel',
                   sectionHighlightClass('pairing')
                 )}
                 style={delayStyle(320)}
               >
-                <div className="flex flex-wrap items-center justify-between gap-3 px-6 pb-4 pt-6 text-[var(--md-sys-color-primary)]">
+                <div className="m3-panel__header">
                   <div className="flex items-center gap-3">
-                    <Wifi className="h-7 w-7 rounded-[16px] bg-[var(--md-sys-color-primary-container)] p-1.5 text-[var(--md-sys-color-on-primary-container)]" />
-                    <h2 className="font-display text-lg font-semibold">{t('section_pairing')}</h2>
+                    <Wifi className="m3-token" />
+                    <h2 className="m3-panel__title">{t('section_pairing')}</h2>
                   </div>
                   <button
                     className={sectionToggleClassName}
@@ -777,25 +714,25 @@ export function HomePage({
                   </button>
                 </div>
                 {!pairingCollapsed && (
-                  <div className="flex flex-col gap-4 px-6 pb-6" id={sectionContentId('pairing')}>
-                    <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">{t('pairing_note')}</p>
+                  <div className="m3-panel__body" id={sectionContentId('pairing')}>
+                    <p className="m3-body-medium m3-on-variant">{t('pairing_note')}</p>
                     <div className="flex flex-col gap-2">
-                      <label className="text-xs font-semibold tracking-wide text-[var(--md-sys-color-on-surface-variant)]">
+                      <label className="m3-field-label">
                         {t('pair_address_label')}
                       </label>
                       <input
-                        className="w-full rounded-[var(--radius-sm)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-3 py-2 text-sm text-[var(--md-sys-color-on-surface)] transition focus:border-[var(--md-sys-color-primary)] focus:bg-[var(--md-sys-color-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)]"
+                        className="m3-field"
                         value={form.pairAddress}
                         onChange={(event) => updateForm('pairAddress', event.target.value)}
                         placeholder="192.168.1.100:12345"
                       />
                     </div>
                     <div className="flex flex-col gap-2">
-                      <label className="text-xs font-semibold tracking-wide text-[var(--md-sys-color-on-surface-variant)]">
+                      <label className="m3-field-label">
                         {t('pair_code_label')}
                       </label>
                       <input
-                        className="w-full rounded-[var(--radius-sm)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-3 py-2 text-sm text-[var(--md-sys-color-on-surface)] transition focus:border-[var(--md-sys-color-primary)] focus:bg-[var(--md-sys-color-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)]"
+                        className="m3-field"
                         value={form.pairCode}
                         onChange={(event) => updateForm('pairCode', event.target.value)}
                         placeholder="123456"
@@ -803,11 +740,7 @@ export function HomePage({
                       />
                     </div>
                     <button
-                      className={cn(
-                        'inline-flex items-center gap-2 rounded-full bg-[var(--md-sys-color-primary)] px-4 py-2 text-sm font-semibold text-[var(--md-sys-color-on-primary)]',
-                        'shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]',
-                        'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-outline)]'
-                      )}
+                      className="m3-btn m3-state m3-btn--filled m3-btn--sm"
                       onClick={() => void pairDevice()}
                     >
                       <Key className="h-4 w-4" />
@@ -820,16 +753,15 @@ export function HomePage({
               <article
                 id="usb-wifi"
                 className={cn(
-                  'reveal flex flex-col gap-3 rounded-[var(--radius-lg)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] shadow-[var(--shadow-1)]',
-                  'transition duration-200 ease-out hover:-translate-y-1 hover:shadow-[var(--shadow-2)] hover:border-[var(--accent-border)] focus-within:-translate-y-0.5 focus-within:shadow-[var(--shadow-2)] focus-within:border-[var(--accent-border-strong)]',
+                  'm3-enter m3-panel',
                   sectionHighlightClass('usb-wifi')
                 )}
                 style={delayStyle(380)}
               >
-                <div className="flex flex-wrap items-center justify-between gap-3 px-6 pb-4 pt-6 text-[var(--md-sys-color-primary)]">
+                <div className="m3-panel__header">
                   <div className="flex items-center gap-3">
-                    <Power className="h-7 w-7 rounded-[16px] bg-[var(--md-sys-color-primary-container)] p-1.5 text-[var(--md-sys-color-on-primary-container)]" />
-                    <h2 className="font-display text-lg font-semibold">{t('section_usb_wifi')}</h2>
+                    <Power className="m3-token" />
+                    <h2 className="m3-panel__title">{t('section_usb_wifi')}</h2>
                   </div>
                   <button
                     className={sectionToggleClassName}
@@ -844,22 +776,22 @@ export function HomePage({
                   </button>
                 </div>
                 {!usbWifiCollapsed && (
-                  <div className="flex flex-col gap-4 px-6 pb-6" id={sectionContentId('usb-wifi')}>
-                    <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">{t('usb_wifi_note')}</p>
-                    <div className="rounded-[var(--radius-md)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-4 py-3">
+                  <div className="m3-panel__body" id={sectionContentId('usb-wifi')}>
+                    <p className="m3-body-medium m3-on-variant">{t('usb_wifi_note')}</p>
+                    <div className="m3-tray">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="flex flex-col gap-1">
-                          <span className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">
+                          <span className="m3-title-small">
                             {t('connection_auto_label') || 'Auto-select connection'}
                           </span>
-                          <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                          <span className="m3-body-small m3-on-variant">
                             {t('connection_auto_hint') || 'Prefer Wi-Fi when latency is lower and stable.'}
                           </span>
                         </div>
-                        <label className="inline-flex items-center gap-2 text-xs font-semibold text-[var(--md-sys-color-on-surface)]">
+                        <label className="inline-flex items-center gap-2 m3-label-medium">
                           <input
                             type="checkbox"
-                            className="h-4 w-4 accent-[var(--md-sys-color-primary)]"
+                            className="m3-checkbox"
                             checked={autoConnectionEnabled}
                             onChange={(event) => onAutoConnectionChange(event.target.checked)}
                             disabled={autoConnectionSaving}
@@ -871,21 +803,17 @@ export function HomePage({
                       </div>
                     </div>
                     <div className="flex flex-col gap-2">
-                      <label className="text-xs font-semibold tracking-wide text-[var(--md-sys-color-on-surface-variant)]">
+                      <label className="m3-field-label">
                         {t('usb_wifi_port_label')}
                       </label>
                       <input
-                        className="w-full rounded-[var(--radius-sm)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-3 py-2 text-sm text-[var(--md-sys-color-on-surface)] transition focus:border-[var(--md-sys-color-primary)] focus:bg-[var(--md-sys-color-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)]"
+                        className="m3-field"
                         value={form.tcpipPort}
                         onChange={(event) => updateForm('tcpipPort', event.target.value)}
                       />
                     </div>
                     <button
-                      className={cn(
-                        'inline-flex items-center gap-2 rounded-full bg-[var(--md-sys-color-primary)] px-4 py-2 text-sm font-semibold text-[var(--md-sys-color-on-primary)]',
-                        'shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]',
-                        'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-outline)]'
-                      )}
+                      className="m3-btn m3-state m3-btn--filled m3-btn--sm"
                       onClick={() => void enableTcpip()}
                     >
                       <Power className="h-4 w-4" />
@@ -899,16 +827,15 @@ export function HomePage({
             <section
               id="scrcpy"
               className={cn(
-                'reveal flex flex-col gap-3 rounded-[30px] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] shadow-[var(--shadow-1)]',
-                'transition duration-200 ease-out hover:-translate-y-1 hover:shadow-[var(--shadow-2)] hover:border-[var(--accent-border)]',
+                'm3-enter m3-panel',
                 sectionHighlightClass('scrcpy')
               )}
               style={delayStyle(440)}
             >
-              <div className="flex flex-wrap items-center justify-between gap-3 px-6 pb-4 pt-6 text-[var(--md-sys-color-primary)]">
+              <div className="m3-panel__header">
                 <div className="flex items-center gap-3">
-                  <Monitor className="h-7 w-7 rounded-[16px] bg-[var(--md-sys-color-primary-container)] p-1.5 text-[var(--md-sys-color-on-primary-container)]" />
-                  <h2 className="font-display text-lg font-semibold">{t('section_scrcpy')}</h2>
+                  <Monitor className="m3-token" />
+                  <h2 className="m3-panel__title">{t('section_scrcpy')}</h2>
                 </div>
                 <button
                   className={sectionToggleClassName}
@@ -923,14 +850,14 @@ export function HomePage({
                 </button>
               </div>
               {!scrcpyCollapsed && (
-                <div className="flex flex-col gap-4 px-6 pb-6" id={sectionContentId('scrcpy')}>
+                <div className="m3-panel__body" id={sectionContentId('scrcpy')}>
                   <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(200px,1fr))]">
                     <div className="flex flex-col gap-2">
-                      <label className="text-xs font-semibold tracking-wide text-[var(--md-sys-color-on-surface-variant)]">
+                      <label className="m3-field-label">
                         {t('scrcpy_preset_label')}
                       </label>
                       <select
-                        className="w-full rounded-[var(--radius-sm)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-3 py-2 text-sm text-[var(--md-sys-color-on-surface)] focus:border-[var(--md-sys-color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)]"
+                        className="m3-field m3-select"
                         value={form.scrcpyPreset}
                         onChange={(event) => {
                           const value = event.target.value;
@@ -951,11 +878,11 @@ export function HomePage({
                     </div>
 
                     <div className="flex flex-col gap-2">
-                      <label className="text-xs font-semibold tracking-wide text-[var(--md-sys-color-on-surface-variant)]">
+                      <label className="m3-field-label">
                         {t('scrcpy_keyboard_label')}
                       </label>
                       <select
-                        className="w-full rounded-[var(--radius-sm)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-3 py-2 text-sm text-[var(--md-sys-color-on-surface)] focus:border-[var(--md-sys-color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)]"
+                        className="m3-field m3-select"
                         value={form.keyboard}
                         onChange={(event) => updateForm('keyboard', event.target.value)}
                       >
@@ -966,11 +893,11 @@ export function HomePage({
                     </div>
 
                     <div className="flex flex-col gap-2">
-                      <label className="text-xs font-semibold tracking-wide text-[var(--md-sys-color-on-surface-variant)]">
+                      <label className="m3-field-label">
                         {t('scrcpy_connection_label')}
                       </label>
                       <select
-                        className="w-full rounded-[var(--radius-sm)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-3 py-2 text-sm text-[var(--md-sys-color-on-surface)] focus:border-[var(--md-sys-color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)]"
+                        className="m3-field m3-select"
                         value={form.connection}
                         onChange={(event) => updateForm('connection', event.target.value)}
                       >
@@ -981,11 +908,11 @@ export function HomePage({
                     </div>
 
                     <div className="flex flex-col gap-2">
-                      <label className="text-xs font-semibold tracking-wide text-[var(--md-sys-color-on-surface-variant)]">
+                      <label className="m3-field-label">
                         {t('scrcpy_device_label')}
                       </label>
                       <select
-                        className="w-full rounded-[var(--radius-sm)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-3 py-2 text-sm text-[var(--md-sys-color-on-surface)] focus:border-[var(--md-sys-color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)]"
+                        className="m3-field m3-select"
                         value={form.scrcpyDevice}
                         onChange={(event) => updateForm('scrcpyDevice', event.target.value)}
                       >
@@ -1000,14 +927,14 @@ export function HomePage({
                   </div>
                   <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(200px,1fr))]">
                     <div className="flex flex-col gap-2">
-                      <label className="text-xs font-semibold tracking-wide text-[var(--md-sys-color-on-surface-variant)]">
+                      <label className="m3-field-label">
                         {t('scrcpy_bitrate_label')}
                       </label>
                       <input
                         type="number"
                         min={1}
                         max={100}
-                        className="w-full rounded-[var(--radius-sm)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-3 py-2 text-sm text-[var(--md-sys-color-on-surface)] transition focus:border-[var(--md-sys-color-primary)] focus:bg-[var(--md-sys-color-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)]"
+                        className="m3-field"
                         value={form.bitrateNum}
                         onChange={(event) => {
                           const value = event.target.value;
@@ -1016,12 +943,12 @@ export function HomePage({
                       />
                     </div>
                     <div className="flex flex-col gap-2">
-                      <label className="text-xs font-semibold tracking-wide text-[var(--md-sys-color-on-surface-variant)]">
+                      <label className="m3-field-label">
                         {t('scrcpy_maxsize_label')}
                       </label>
                       <input
                         type="number"
-                        className="w-full rounded-[var(--radius-sm)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-3 py-2 text-sm text-[var(--md-sys-color-on-surface)] transition focus:border-[var(--md-sys-color-primary)] focus:bg-[var(--md-sys-color-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)]"
+                        className="m3-field"
                         value={form.maxsize}
                         onChange={(event) => {
                           const value = event.target.value;
@@ -1031,7 +958,7 @@ export function HomePage({
                     </div>
                   </div>
 
-                  <div className="grid gap-3 rounded-[var(--radius-md)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] p-4 [grid-template-columns:repeat(auto-fit,minmax(200px,1fr))]">
+                  <div className="m3-tray grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(200px,1fr))]">
                     {[
                       { key: 'stayAwake', label: t('scrcpy_stay_awake') },
                       { key: 'showTouches', label: t('scrcpy_show_touches') },
@@ -1041,11 +968,11 @@ export function HomePage({
                     ].map((item) => (
                       <label
                         key={item.key}
-                        className="flex items-center gap-2 rounded-full border border-transparent bg-[var(--md-sys-color-surface-container-low)] px-3 py-2 text-sm text-[var(--md-sys-color-on-surface)] transition hover:border-[var(--md-sys-color-outline)]"
+                        className="m3-switch-row justify-start"
                       >
                         <input
                           type="checkbox"
-                          className="h-4 w-4 accent-[var(--md-sys-color-primary)]"
+                          className="m3-checkbox"
                           checked={form[item.key as keyof FormState] as boolean}
                           onChange={(event) => updateForm(item.key as keyof FormState, event.target.checked)}
                         />
@@ -1055,11 +982,7 @@ export function HomePage({
                   </div>
 
                   <button
-                    className={cn(
-                      'inline-flex w-full items-center justify-center gap-2 rounded-full bg-[var(--button-success-bg)] px-6 py-3 text-base font-semibold text-white',
-                      'shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]',
-                      'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-outline)]'
-                    )}
+                    className="m3-btn m3-state m3-btn--filled m3-btn--lg m3-btn--block"
                     onClick={() => void launchScrcpy()}
                   >
                     <Play className="h-5 w-5" />
@@ -1073,16 +996,15 @@ export function HomePage({
               <article
                 id="presets"
                 className={cn(
-                  'reveal flex flex-col gap-3 rounded-[var(--radius-lg)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] shadow-[var(--shadow-1)]',
-                  'transition duration-200 ease-out hover:-translate-y-1 hover:shadow-[var(--shadow-2)] hover:border-[var(--accent-border)] focus-within:-translate-y-0.5 focus-within:shadow-[var(--shadow-2)] focus-within:border-[var(--accent-border-strong)]',
+                  'm3-enter m3-panel',
                   sectionHighlightClass('presets')
                 )}
                 style={delayStyle(500)}
               >
-                <div className="flex flex-wrap items-center justify-between gap-3 px-6 pb-4 pt-6 text-[var(--md-sys-color-primary)]">
+                <div className="m3-panel__header">
                   <div className="flex items-center gap-3">
-                    <Bookmark className="h-7 w-7 rounded-[16px] bg-[var(--md-sys-color-primary-container)] p-1.5 text-[var(--md-sys-color-on-primary-container)]" />
-                    <h2 className="font-display text-lg font-semibold">{t('section_presets')}</h2>
+                    <Bookmark className="m3-token" />
+                    <h2 className="m3-panel__title">{t('section_presets')}</h2>
                   </div>
                   <button
                     className={sectionToggleClassName}
@@ -1097,63 +1019,51 @@ export function HomePage({
                   </button>
                 </div>
                 {!presetsCollapsed && (
-                  <div className="flex flex-col gap-4 px-6 pb-6" id={sectionContentId('presets')}>
+                  <div className="m3-panel__body" id={sectionContentId('presets')}>
                     <div className="flex flex-col gap-2">
-                      <label className="text-xs font-semibold tracking-wide text-[var(--md-sys-color-on-surface-variant)]">
+                      <label className="m3-field-label">
                         {t('preset_name_label')}
                       </label>
                       <input
-                        className="w-full rounded-[var(--radius-sm)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-3 py-2 text-sm text-[var(--md-sys-color-on-surface)] transition focus:border-[var(--md-sys-color-primary)] focus:bg-[var(--md-sys-color-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)]"
+                        className="m3-field"
                         value={form.presetName}
                         onChange={(event) => updateForm('presetName', event.target.value)}
                         placeholder={t('preset_name_placeholder')}
                       />
                     </div>
                     <button
-                      className={cn(
-                        'inline-flex items-center gap-2 rounded-full border border-transparent bg-[var(--md-sys-color-secondary-container)] px-4 py-2 text-sm font-semibold',
-                        'text-[var(--button-secondary-text)] shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]',
-                        'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-outline)]'
-                      )}
+                      className="m3-btn m3-state m3-btn--tonal m3-btn--sm"
                       onClick={() => void savePreset()}
                     >
                       <Save className="h-4 w-4" />
                       {t('preset_save_button')}
                     </button>
                     <div className="flex flex-col gap-3">
-                      <h3 className="font-display text-sm font-semibold">{t('preset_list_title')}</h3>
+                      <h3 className="m3-title-small">{t('preset_list_title')}</h3>
                       {presets.length === 0 ? (
-                        <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">{t('preset_empty')}</p>
+                        <p className="m3-body-medium m3-on-variant">{t('preset_empty')}</p>
                       ) : (
                         <div className="flex flex-col gap-3">
                           {presets.map((preset) => (
                             <div
                               key={preset.name}
-                              className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] px-4 py-3"
+                              className="m3-row m3-cv-row"
                             >
                               <div className="flex min-w-0 flex-1 flex-col gap-1">
                                 <strong className="text-sm">{preset.name}</strong>
-                                <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                                <span className="m3-body-small m3-on-variant">
                                   {preset.bitrate} / {preset.maxsize}px
                                 </span>
                               </div>
                               <div className="flex flex-wrap items-center gap-2">
                                 <button
-                                  className={cn(
-                                    'inline-flex items-center gap-2 rounded-full bg-[var(--md-sys-color-primary)] px-3 py-1.5 text-xs font-semibold text-[var(--md-sys-color-on-primary)]',
-                                    'shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]',
-                                    'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-outline)]'
-                                  )}
+                                  className="m3-btn m3-state m3-btn--filled m3-btn--xs"
                                   onClick={() => applyPreset(preset.name)}
                                 >
                                   {t('preset_apply_button')}
                                 </button>
                                 <button
-                                  className={cn(
-                                    'inline-flex items-center gap-2 rounded-full bg-[var(--md-sys-color-error)] px-3 py-1.5 text-xs font-semibold text-white',
-                                    'shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]',
-                                    'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[rgba(180,35,24,0.35)]'
-                                  )}
+                                  className="m3-btn m3-state m3-btn--danger m3-btn--xs"
                                   onClick={() => void removePreset(preset.name)}
                                 >
                                   {t('preset_delete_button')}
@@ -1170,16 +1080,15 @@ export function HomePage({
               <article
                 id="diagnostics"
                 className={cn(
-                  'reveal flex flex-col gap-3 rounded-[var(--radius-lg)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] shadow-[var(--shadow-1)]',
-                  'transition duration-200 ease-out hover:-translate-y-1 hover:shadow-[var(--shadow-2)] hover:border-[var(--accent-border)] focus-within:-translate-y-0.5 focus-within:shadow-[var(--shadow-2)] focus-within:border-[var(--accent-border-strong)]',
+                  'm3-enter m3-panel',
                   sectionHighlightClass('diagnostics')
                 )}
                 style={delayStyle(560)}
               >
-                <div className="flex flex-wrap items-center justify-between gap-3 px-6 pb-4 pt-5 text-[var(--md-sys-color-primary)]">
+                <div className="m3-panel__header">
                   <div className="flex items-center gap-3">
-                    <ShieldCheck className="h-7 w-7 rounded-[16px] bg-[var(--md-sys-color-primary-container)] p-1.5 text-[var(--md-sys-color-on-primary-container)]" />
-                    <h2 className="font-display text-lg font-semibold">{t('section_diagnostics')}</h2>
+                    <ShieldCheck className="m3-token" />
+                    <h2 className="m3-panel__title">{t('section_diagnostics')}</h2>
                   </div>
                   <button
                     className={sectionToggleClassName}
@@ -1194,25 +1103,21 @@ export function HomePage({
                   </button>
                 </div>
                 {!diagnosticsCollapsed && (
-                  <div className="flex flex-col gap-4 px-6 pb-6" id={sectionContentId('diagnostics')}>
-                    <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">{t('diagnostics_note')}</p>
+                  <div className="m3-panel__body" id={sectionContentId('diagnostics')}>
+                    <p className="m3-body-medium m3-on-variant">{t('diagnostics_note')}</p>
                     <div className="flex flex-col gap-2">
-                      <label className="text-xs font-semibold tracking-wide text-[var(--md-sys-color-on-surface-variant)]">
+                      <label className="m3-field-label">
                         {t('downloads_base_dir_label')}
                       </label>
                       <div className="flex flex-wrap items-center gap-2">
                         <input
-                          className="min-w-[220px] flex-1 rounded-[var(--radius-sm)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-3 py-2 text-sm text-[var(--md-sys-color-on-surface)] transition focus:border-[var(--md-sys-color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)]"
+                          className="m3-field min-w-[220px] flex-1"
                           value={downloadsBaseDir}
                           onChange={(event) => setDownloadsBaseDir(event.target.value)}
                           placeholder={t('downloads_base_dir_placeholder')}
                         />
                         <button
-                          className={cn(
-                            'inline-flex items-center gap-2 rounded-full border border-transparent bg-[var(--md-sys-color-secondary-container)] px-4 py-2 text-sm font-semibold',
-                            'text-[var(--button-secondary-text)] shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]',
-                            'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-outline)]'
-                          )}
+                          className="m3-btn m3-state m3-btn--tonal m3-btn--sm"
                           type="button"
                           onClick={() => void saveDownloadsBaseDir(downloadsBaseDir.trim())}
                           disabled={!downloadsBaseDir.trim()}
@@ -1221,11 +1126,7 @@ export function HomePage({
                           {t('downloads_base_dir_save')}
                         </button>
                         <button
-                          className={cn(
-                            'inline-flex items-center gap-2 rounded-full border border-[var(--md-sys-color-outline-variant)] px-4 py-2 text-sm font-semibold',
-                            'bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]',
-                            'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-outline)]'
-                          )}
+                          className="m3-btn m3-state m3-btn--outlined m3-btn--sm"
                           type="button"
                           onClick={() => void selectDownloadsBaseDir()}
                         >
@@ -1233,27 +1134,23 @@ export function HomePage({
                           {t('downloads_base_dir_choose')}
                         </button>
                       </div>
-                      <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                      <span className="m3-body-small m3-on-variant">
                         {t('downloads_base_dir_note')}
                       </span>
                     </div>
                     <div className="flex flex-col gap-2">
-                      <label className="text-xs font-semibold tracking-wide text-[var(--md-sys-color-on-surface-variant)]">
+                      <label className="m3-field-label">
                         {t('logs_export_dir_label')}
                       </label>
                       <div className="flex flex-wrap items-center gap-2">
                         <input
-                          className="min-w-[220px] flex-1 rounded-[var(--radius-sm)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-3 py-2 text-sm text-[var(--md-sys-color-on-surface)] transition focus:border-[var(--md-sys-color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)]"
+                          className="m3-field min-w-[220px] flex-1"
                           value={logsExportDir}
                           onChange={(event) => setLogsExportDir(event.target.value)}
                           placeholder={t('logs_export_dir_placeholder')}
                         />
                         <button
-                          className={cn(
-                            'inline-flex items-center gap-2 rounded-full border border-transparent bg-[var(--md-sys-color-secondary-container)] px-4 py-2 text-sm font-semibold',
-                            'text-[var(--button-secondary-text)] shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]',
-                            'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-outline)]'
-                          )}
+                          className="m3-btn m3-state m3-btn--tonal m3-btn--sm"
                           type="button"
                           onClick={() => void saveLogsExportDir(logsExportDir.trim())}
                           disabled={!logsExportDir.trim()}
@@ -1262,11 +1159,7 @@ export function HomePage({
                           {t('logs_export_dir_save')}
                         </button>
                         <button
-                          className={cn(
-                            'inline-flex items-center gap-2 rounded-full border border-[var(--md-sys-color-outline-variant)] px-4 py-2 text-sm font-semibold',
-                            'bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]',
-                            'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-outline)]'
-                          )}
+                          className="m3-btn m3-state m3-btn--outlined m3-btn--sm"
                           type="button"
                           onClick={() => void selectLogsExportDir()}
                         >
@@ -1277,22 +1170,14 @@ export function HomePage({
                     </div>
                     <div className="flex flex-wrap gap-3">
                       <button
-                        className={cn(
-                          'inline-flex items-center gap-2 rounded-full bg-[var(--md-sys-color-primary)] px-4 py-2 text-sm font-semibold text-[var(--md-sys-color-on-primary)]',
-                          'shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]',
-                          'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-outline)]'
-                        )}
+                        className="m3-btn m3-state m3-btn--filled m3-btn--sm"
                         onClick={() => void exportLogs()}
                       >
                         <Download className="h-4 w-4" />
                         {t('logs_export_button')}
                       </button>
                       <button
-                        className={cn(
-                          'inline-flex items-center gap-2 rounded-full border border-transparent bg-[var(--md-sys-color-secondary-container)] px-4 py-2 text-sm font-semibold',
-                          'text-[var(--button-secondary-text)] shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]',
-                          'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-outline)]'
-                        )}
+                        className="m3-btn m3-state m3-btn--tonal m3-btn--sm"
                         onClick={() => void checkUpdates()}
                         disabled={Boolean(updateProgress)}
                       >
@@ -1300,7 +1185,7 @@ export function HomePage({
                         {t('update_check_button')}
                       </button>
                       {updateProgress && (
-                        <span className="self-center text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                        <span className="self-center m3-body-small m3-on-variant">
                           {updateProgress}
                         </span>
                       )}
@@ -1311,16 +1196,15 @@ export function HomePage({
               <article
                 id="config"
                 className={cn(
-                  'reveal flex flex-col gap-3 rounded-[var(--radius-lg)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] shadow-[var(--shadow-1)]',
-                  'transition duration-200 ease-out hover:-translate-y-1 hover:shadow-[var(--shadow-2)] hover:border-[var(--accent-border)] focus-within:-translate-y-0.5 focus-within:shadow-[var(--shadow-2)] focus-within:border-[var(--accent-border-strong)]',
+                  'm3-enter m3-panel',
                   sectionHighlightClass('config')
                 )}
                 style={delayStyle(620)}
               >
-                <div className="flex flex-wrap items-center justify-between gap-3 px-6 pb-4 pt-5 text-[var(--md-sys-color-primary)]">
+                <div className="m3-panel__header">
                   <div className="flex items-center gap-3">
-                    <Key className="h-7 w-7 rounded-[16px] bg-[var(--md-sys-color-primary-container)] p-1.5 text-[var(--md-sys-color-on-primary-container)]" />
-                    <h2 className="font-display text-lg font-semibold">{t('section_config')}</h2>
+                    <Key className="m3-token" />
+                    <h2 className="m3-panel__title">{t('section_config')}</h2>
                   </div>
                   <button
                     className={sectionToggleClassName}
@@ -1335,10 +1219,10 @@ export function HomePage({
                   </button>
                 </div>
                 {!configCollapsed && (
-                  <div className="flex flex-col gap-4 px-6 pb-6" id={sectionContentId('config')}>
-                    <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">{t('config_note')}</p>
+                  <div className="m3-panel__body" id={sectionContentId('config')}>
+                    <p className="m3-body-medium m3-on-variant">{t('config_note')}</p>
                     <textarea
-                      className="min-h-[220px] w-full rounded-[var(--radius-md)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] p-3 font-mono text-xs text-[var(--md-sys-color-on-surface)] focus:border-[var(--md-sys-color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)]"
+                      className="m3-field m3-field--mono min-h-[220px]"
                       value={configDraft}
                       onChange={(event) => setConfigDraft(event.target.value)}
                       placeholder="{ }"
@@ -1346,11 +1230,7 @@ export function HomePage({
                     />
                     <div className="flex flex-wrap gap-3">
                       <button
-                        className={cn(
-                          'inline-flex items-center gap-2 rounded-full border border-transparent bg-[var(--md-sys-color-secondary-container)] px-4 py-2 text-sm font-semibold',
-                          'text-[var(--button-secondary-text)] shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]',
-                          'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-outline)]'
-                        )}
+                        className="m3-btn m3-state m3-btn--tonal m3-btn--sm"
                         type="button"
                         onClick={() => void loadFullConfig()}
                         disabled={configLoading}
@@ -1359,11 +1239,7 @@ export function HomePage({
                         {t('config_reload_button')}
                       </button>
                       <button
-                        className={cn(
-                          'inline-flex items-center gap-2 rounded-full bg-[var(--md-sys-color-primary)] px-4 py-2 text-sm font-semibold text-[var(--md-sys-color-on-primary)]',
-                          'shadow-[var(--shadow-1)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)]',
-                          'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-outline)]'
-                        )}
+                        className="m3-btn m3-state m3-btn--filled m3-btn--sm"
                         type="button"
                         onClick={() => void saveFullConfig()}
                         disabled={configSaving || !configDraft.trim()}
