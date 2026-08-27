@@ -431,8 +431,21 @@ fn verify_sha256(path: &Path, expected: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Байты в шестнадцатеричную строку.
+///
+/// Через `fold`, а не `map(format!).collect()`: второй вариант выделяет
+/// отдельную строку на каждый байт, и на хеше это 32 лишние аллокации.
 fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+    use std::fmt::Write;
+
+    bytes.iter().fold(
+        String::with_capacity(bytes.len() * 2),
+        |mut out, byte| {
+            // Запись в String отказать не может — ошибку отбрасываем осознанно.
+            let _ = write!(out, "{byte:02x}");
+            out
+        },
+    )
 }
 
 fn extract(archive: &Path, dest: &Path) -> Result<(), String> {
