@@ -10,6 +10,13 @@
  */
 export const openExternal = async (url: string) => {
   if (!url) return;
-  const { openUrl } = await import('@tauri-apps/plugin-opener');
-  await openUrl(url);
+  try {
+    const { openUrl } = await import('@tauri-apps/plugin-opener');
+    await openUrl(url);
+  } catch (error) {
+    // Молчать тут нельзя. Ссылки уже один раз «не работали» без единого следа:
+    // плагину было выдано право вызвать команду, но не область видимости, и он
+    // отвергал каждый URL. Со стороны это выглядело как мёртвая кнопка.
+    console.error(`[opener] не удалось открыть ${url}:`, error);
+  }
 };

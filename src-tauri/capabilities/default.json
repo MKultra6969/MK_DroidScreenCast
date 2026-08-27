@@ -6,7 +6,13 @@
     "core:default",
     "dialog:allow-ask",
     "dialog:allow-open",
-    "opener:allow-open-url",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        { "url": "https://github.com/*" },
+        { "url": "https://t.me/*" }
+      ]
+    },
     "updater:default",
     "process:default"
   ]
