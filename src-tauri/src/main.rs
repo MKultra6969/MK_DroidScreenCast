@@ -66,6 +66,7 @@ pub(crate) fn log_launcher_event(data_dir: &std::path::Path, message: &str) {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
             api::api_devices,

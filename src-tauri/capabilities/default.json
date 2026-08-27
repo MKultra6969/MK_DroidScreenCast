@@ -6,6 +6,7 @@
     "core:default",
     "dialog:allow-ask",
     "dialog:allow-open",
+    "opener:allow-open-url",
     "updater:default",
     "process:default"
   ]

@@ -167,38 +167,23 @@ pub async fn take(
     let device_path = format!("/sdcard/{filename}");
     let local_path = dir.join(&filename);
 
-    let capture = run(
-        adb,
-        serial,
-        &["shell", "screencap", "-p", &device_path],
-        CAPTURE_TIMEOUT,
-    )
-    .await?;
-    if capture.timed_out {
+    // `exec-out` отдаёт png прямо в stdout: один запуск adb вместо трёх и ни
+    // одного файла на телефоне. Прежний путь снимал в /sdcard, тянул файл
+    // через `pull` и потом удалял — три подключения к устройству на каждый
+    // снимок, отсюда и заметная задержка.
+    let quick = run_bytes(adb, serial, &["exec-out", "screencap", "-p"], CAPTURE_TIMEOUT).await?;
+    if quick.timed_out {
         return Err(ApiError::internal("Screenshot operation timed out"));
     }
-    if !capture.success() {
-        return Err(ApiError::internal(format!(
-            "Failed to capture screenshot: {}",
-            capture.stderr
-        )));
-    }
 
-    let local = local_path.to_string_lossy().into_owned();
-    let pull = run(adb, serial, &["pull", &device_path, &local], CAPTURE_TIMEOUT).await?;
-    if pull.timed_out {
-        return Err(ApiError::internal("Screenshot operation timed out"));
+    if quick.success() && is_png(&quick.stdout) {
+        std::fs::write(&local_path, &quick.stdout)
+            .map_err(|err| ApiError::internal(err.to_string()))?;
+    } else {
+        // `exec-out` понимает не всякая прошивка, а часть отдаёт по нему пустой
+        // или испорченный поток — тогда работаем по-старому.
+        capture_through_device(adb, serial, &device_path, &local_path).await?;
     }
-    if !pull.success() || !local_path.exists() {
-        return Err(ApiError::internal(format!(
-            "Failed to pull screenshot: {}",
-            pull.stderr
-        )));
-    }
-
-    // Файл на устройстве больше не нужен; неудача уборки не повод отдавать
-    // ошибку — скриншот уже на диске.
-    let _ = run(adb, serial, &["shell", "rm", &device_path], CLEANUP_TIMEOUT).await;
 
     let entry = json!({
         "id": id,
@@ -301,6 +286,70 @@ fn find<'a>(metadata: &'a [Value], id: &str) -> Result<&'a Value, ApiError> {
         .iter()
         .find(|entry| entry_str(entry, "id") == id)
         .ok_or_else(|| ApiError::new(404, "Screenshot not found"))
+}
+
+/// png начинается с восьмибайтовой сигнатуры — по ней и отличаем настоящий
+/// снимок от сообщения об ошибке, которое прошивка могла выдать в stdout.
+fn is_png(data: &[u8]) -> bool {
+    data.starts_with(&[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a])
+}
+
+/// Запасной путь: снять в файл на устройстве, забрать его и убрать за собой.
+async fn capture_through_device(
+    adb: &Path,
+    serial: Option<&str>,
+    device_path: &str,
+    local_path: &Path,
+) -> Result<(), ApiError> {
+    let capture = run(
+        adb,
+        serial,
+        &["shell", "screencap", "-p", device_path],
+        CAPTURE_TIMEOUT,
+    )
+    .await?;
+    if capture.timed_out {
+        return Err(ApiError::internal("Screenshot operation timed out"));
+    }
+    if !capture.success() {
+        return Err(ApiError::internal(format!(
+            "Failed to capture screenshot: {}",
+            capture.stderr
+        )));
+    }
+
+    let local = local_path.to_string_lossy().into_owned();
+    let pull = run(adb, serial, &["pull", device_path, &local], CAPTURE_TIMEOUT).await?;
+    if pull.timed_out {
+        return Err(ApiError::internal("Screenshot operation timed out"));
+    }
+    if !pull.success() || !local_path.exists() {
+        return Err(ApiError::internal(format!(
+            "Failed to pull screenshot: {}",
+            pull.stderr
+        )));
+    }
+
+    // Файл на устройстве больше не нужен; неудача уборки не повод отдавать
+    // ошибку — скриншот уже на диске.
+    let _ = run(adb, serial, &["shell", "rm", device_path], CLEANUP_TIMEOUT).await;
+    Ok(())
+}
+
+/// То же, что `run`, но stdout не декодируется — для `exec-out`.
+async fn run_bytes(
+    adb: &Path,
+    serial: Option<&str>,
+    args: &[&str],
+    timeout: Duration,
+) -> Result<devices::AdbBytes, ApiError> {
+    let mut argv: Vec<&str> = Vec::new();
+    if let Some(serial) = serial {
+        argv.push("-s");
+        argv.push(serial);
+    }
+    argv.extend_from_slice(args);
+    devices::run_adb_bytes(adb, &argv, timeout).await
 }
 
 async fn run(

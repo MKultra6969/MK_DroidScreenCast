@@ -1,1 +1,1 @@
-{"main-default":{"identifier":"main-default","description":"Default permissions for the main window.","local":true,"windows":["main"],"permissions":["core:default","dialog:allow-ask","dialog:allow-open","updater:default","process:default"]}}
+{"main-default":{"identifier":"main-default","description":"Default permissions for the main window.","local":true,"windows":["main"],"permissions":["core:default","dialog:allow-ask","dialog:allow-open","opener:allow-open-url","updater:default","process:default"]}}

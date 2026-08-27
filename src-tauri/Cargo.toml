@@ -22,6 +22,10 @@ serde = { version = "1", features = ["derive"] }
 # отсортировала бы ключи по алфавиту и перетасовала весь файл.
 serde_json = { version = "1", features = ["preserve_order"] }
 tauri-plugin-dialog = "2"
+# Открыть ссылку в системном браузере. Без него `target="_blank"` и
+# `window.open` в webview не делают ничего: новых окон движку не разрешено,
+# и ссылки в футере и на страницу релиза молча не срабатывали.
+tauri-plugin-opener = "2"
 tauri-plugin-process = "2"
 uuid = { version = "1", features = ["v4"] }
 # Внешние процессы (adb) запускаются из async-команд, поэтому нужен

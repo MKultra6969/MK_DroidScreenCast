@@ -547,7 +547,10 @@
   padding: 10px 14px;
   border: none;
   border-radius: var(--md-sys-shape-md);
-  background: var(--md-sys-color-surface-container-high);
+  /* Именно background-color, а не сокращённое background: у `.m3-select`
+     фон — ещё и картинка-шеврон, и шорткат сбрасывал бы ей repeat и
+     position, размножая стрелку по всей ширине поля. */
+  background-color: var(--md-sys-color-surface-container-high);
   color: var(--md-sys-color-on-surface);
   font-size: 14px;
   line-height: 20px;
@@ -570,7 +573,7 @@
 
 .m3-field:focus {
   outline: none;
-  background: var(--md-sys-color-surface-container-lowest);
+  background-color: var(--md-sys-color-surface-container-lowest);
   box-shadow: inset 0 0 0 2px var(--md-sys-color-primary);
 }
 

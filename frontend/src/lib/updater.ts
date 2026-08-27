@@ -1,4 +1,5 @@
 import { isTauri } from './api';
+import { openExternal } from './open';
 
 export type UpdateInfo = {
   version: string;
@@ -77,6 +78,5 @@ export const restartApp = async () => {
 };
 
 export const openReleasePage = async (url: string) => {
-  if (!url) return;
-  window.open(url, '_blank', 'noopener,noreferrer');
+  await openExternal(url);
 };

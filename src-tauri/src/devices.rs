@@ -105,6 +105,24 @@ pub struct AdbOutput {
     pub timed_out: bool,
 }
 
+/// То же, что `AdbOutput`, но stdout не тронут декодированием.
+///
+/// Без `stderr`: единственный вызывающий при неуспехе молча уходит на запасной
+/// путь, и текст ошибки пользователь всё равно увидит от него — уже про ту
+/// команду, которая отработала последней.
+#[derive(Debug, Clone)]
+pub struct AdbBytes {
+    pub code: i32,
+    pub stdout: Vec<u8>,
+    pub timed_out: bool,
+}
+
+impl AdbBytes {
+    pub fn success(&self) -> bool {
+        self.code == 0
+    }
+}
+
 impl AdbOutput {
     pub fn success(&self) -> bool {
         self.code == 0
@@ -123,6 +141,57 @@ impl AdbOutput {
 /// собирает `run_cmd` в `mkdsc/tools.py`, и так его видит пользователь в поле
 /// `output`. Ошибкой (500) остаётся только невозможность запустить процесс.
 pub async fn run_adb(adb: &Path, args: &[&str], timeout: Duration) -> Result<AdbOutput, ApiError> {
+    let Some(output) = spawn_adb(adb, args, timeout).await? else {
+        return Ok(AdbOutput {
+            code: TIMEOUT_RETURNCODE,
+            stdout: String::new(),
+            stderr: format!("Command timed out after {} seconds", timeout.as_secs()),
+            timed_out: true,
+        });
+    };
+
+    Ok(AdbOutput {
+        code: output.status.code().unwrap_or(-1),
+        // Вывод adb не обязан быть валидным UTF-8: серийник приходит от
+        // прошивки, а имя устройства — от пользователя. Декодируем lossy,
+        // чтобы мусорный байт не ронял всю команду.
+        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+        timed_out: false,
+    })
+}
+
+/// Запускает adb и отдаёт stdout как есть, без декодирования.
+///
+/// `run_adb` разбирает вывод как UTF-8 lossy, и для двоичных данных это порча:
+/// каждый недопустимый байт стал бы U+FFFD. Нужен ровно для `exec-out`, где в
+/// stdout приходит файл целиком.
+pub async fn run_adb_bytes(
+    adb: &Path,
+    args: &[&str],
+    timeout: Duration,
+) -> Result<AdbBytes, ApiError> {
+    let Some(output) = spawn_adb(adb, args, timeout).await? else {
+        return Ok(AdbBytes {
+            code: TIMEOUT_RETURNCODE,
+            stdout: Vec::new(),
+            timed_out: true,
+        });
+    };
+
+    Ok(AdbBytes {
+        code: output.status.code().unwrap_or(-1),
+        stdout: output.stdout,
+        timed_out: false,
+    })
+}
+
+/// Общая часть обоих запусков. `None` — процесс не уложился в таймаут.
+async fn spawn_adb(
+    adb: &Path,
+    args: &[&str],
+    timeout: Duration,
+) -> Result<Option<std::process::Output>, ApiError> {
     // `tokio::process`, а не `std::process`: команда вызывается из async-кода,
     // и блокирующее ожидание встало бы прямо в потоке рантайма.
     let mut command = tokio::process::Command::new(adb);
@@ -136,25 +205,12 @@ pub async fn run_adb(adb: &Path, args: &[&str], timeout: Duration) -> Result<Adb
     crate::set_no_window(command.as_std_mut());
 
     let Ok(result) = tokio::time::timeout(timeout, command.output()).await else {
-        return Ok(AdbOutput {
-            code: TIMEOUT_RETURNCODE,
-            stdout: String::new(),
-            stderr: format!("Command timed out after {} seconds", timeout.as_secs()),
-            timed_out: true,
-        });
+        return Ok(None);
     };
 
-    let output = result.map_err(|err| ApiError::internal(format!("failed to run adb: {err}")))?;
-
-    Ok(AdbOutput {
-        code: output.status.code().unwrap_or(-1),
-        // Вывод adb не обязан быть валидным UTF-8: серийник приходит от
-        // прошивки, а имя устройства — от пользователя. Декодируем lossy,
-        // чтобы мусорный байт не ронял всю команду.
-        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
-        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
-        timed_out: false,
-    })
+    result
+        .map(Some)
+        .map_err(|err| ApiError::internal(format!("failed to run adb: {err}")))
 }
 
 /// Аргументы с необязательным `-s <serial>` — как `_adb_cmd` в Python.

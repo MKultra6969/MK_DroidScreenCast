@@ -432,7 +432,7 @@ export function HomePage({
               )}
             </section>
 
-            <section className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(280px,1fr))]">
+            <section className="grid items-start gap-6 [grid-template-columns:repeat(auto-fit,minmax(280px,1fr))]">
               <article
                 id="active-devices"
                 className={cn(
@@ -476,7 +476,7 @@ export function HomePage({
                               key={device.serial}
                               className="m3-row m3-cv-row"
                             >
-                              <div className="min-w-0 flex-1">
+                              <div className="min-w-0 flex-1 basis-40">
                                 <div className="flex min-w-0 items-center gap-2 font-semibold">
                                   {isWifi ? (
                                     <Wifi className="h-4 w-4 shrink-0 text-primary" />
@@ -485,7 +485,9 @@ export function HomePage({
                                   )}
                                   <span className="truncate" title={device.serial}>{device.serial}</span>
                                 </div>
-                                <div className="m3-body-small m3-on-variant">{device.status}</div>
+                                <div className="m3-body-small m3-on-variant truncate" title={device.status}>
+                                  {device.status}
+                                </div>
                               </div>
                               <div className="flex flex-wrap items-center gap-2">
                                 {isWifi && (
@@ -597,7 +599,7 @@ export function HomePage({
                               key={`${device.ip}:${device.port}`}
                               className="m3-row m3-cv-row"
                             >
-                              <div className="min-w-0 flex-1">
+                              <div className="min-w-0 flex-1 basis-40">
                                 <div className="flex min-w-0 items-center gap-2 font-semibold">
                                   {device.connection_type === 'wifi' ? (
                                     <Wifi className="h-4 w-4 shrink-0 text-primary" />
@@ -606,7 +608,10 @@ export function HomePage({
                                   )}
                                   <span className="truncate" title={device.name}>{device.name}</span>
                                 </div>
-                                <div className="m3-body-small m3-on-variant">
+                                <div
+                                  className="m3-body-small m3-on-variant truncate"
+                                  title={`${device.ip}:${device.port}`}
+                                >
                                   {device.ip}:{device.port}
                                 </div>
                               </div>
@@ -992,7 +997,7 @@ export function HomePage({
               )}
             </section>
 
-            <section className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(280px,1fr))]">
+            <section className="grid items-start gap-6 [grid-template-columns:repeat(auto-fit,minmax(280px,1fr))]">
               <article
                 id="presets"
                 className={cn(
