@@ -83,11 +83,24 @@ jobs:
             cargo build --release --locked --manifest-path src-tauri/Cargo.toml
           '
 
-      - name: Show what came out
+      # Compiling is not the same as starting. This resolves the binary's
+      # dynamic dependencies inside a clean Alpine that has only the runtime
+      # packages — no -dev, no toolchain — so a library that exists solely on
+      # the build side would show up here as a missing symbol.
+      #
+      # Running `ldd` on the host instead would be meaningless: it resolves a
+      # musl binary against the runner's glibc libraries and reports half of
+      # them as missing whether they are or not.
+      - name: Check it resolves on a clean Alpine
         run: |
           sudo chmod a+rx src-tauri/target/release/mkdsc-tauri
           file src-tauri/target/release/mkdsc-tauri
-          ldd src-tauri/target/release/mkdsc-tauri || true
+          docker run --rm -v "$PWD:/work" -w /work alpine:3.23 sh -eu -c '
+            apk add --no-cache musl-utils webkit2gtk-4.1 gtk+3.0               libayatana-appindicator librsvg font-dejavu               android-tools scrcpy
+            ldd src-tauri/target/release/mkdsc-tauri
+            adb --version | head -1
+            scrcpy --version | head -1
+          '
 
       - uses: actions/upload-artifact@v4
         with:
