@@ -149,8 +149,20 @@ The downloader fetches Google's platform-tools and the upstream scrcpy release,
 both built against glibc: the checksum verifies, and the binary then refuses to
 run. Anything already on `PATH` is preferred over downloading (see
 `locate_adb`/`locate_scrcpy` in `src/tools.rs`), so installing the packages is
-enough — no environment variable is needed. Alpine's `scrcpy` is 4.1, the very
-version pinned in `install.rs`.
+enough — no environment variable is needed.
+
+One caveat on versions. Alpine 3.23 ships **scrcpy 3.3.3**, one patch below
+`SCRCPY_VERIFIED_MIN` (3.3.4), so the app shows its "outside the verified range"
+warning. It is deliberately non-blocking — scrcpy still launches — but some
+options may not behave as tested. To stay inside the range, either take scrcpy
+from Alpine's edge repository, which carries 4.1:
+
+```sh
+apk add --no-cache --repository https://dl-cdn.alpinelinux.org/alpine/edge/community scrcpy
+```
+
+or point `MKDSC_SCRCPY_PATH` at a build of your own. Alpine's `android-tools`
+(adb 1.0.41, platform-tools 37.0.0) needs no such workaround.
 
 There is no self-update on Alpine: only bundles are signed, and this target
 produces a bare executable.
