@@ -1,7 +1,7 @@
 [🇺🇸English](https://github.com/MKultra6969/MK_DroidScreenCast/blob/main/README_ENG.md)
 <div align="center">
 
-# 📱 MK DroidScreenCast v1.0.2
+# 📱 MK DroidScreenCast v2.0.0
 
 **Полноценное настольное приложение для управления Android на базе ADB и Scrcpy**
 <br>
@@ -9,7 +9,7 @@
 
 [![Tauri](https://img.shields.io/badge/Tauri-Desktop-24C8DB?style=for-the-badge&logo=tauri&logoColor=white)](https://tauri.app/)
 [![Scrcpy](https://img.shields.io/badge/Powered_by-Scrcpy-green?style=for-the-badge&logo=android)](https://github.com/Genymobile/scrcpy)
-[![Version](https://img.shields.io/badge/Version-1.0.2-2ea44f?style=for-the-badge)](#)
+[![Version](https://img.shields.io/badge/Version-2.0.0-2ea44f?style=for-the-badge)](#)
 [![License](https://img.shields.io/badge/License-WTFPL-red?style=for-the-badge)](http://www.wtfpl.net/)
 
 </div>

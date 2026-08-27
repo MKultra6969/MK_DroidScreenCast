@@ -9,7 +9,7 @@
 
 ---
 
-## [Unreleased]
+## [2.0.0] — 2026-08-26
 
 ### Security
 
@@ -164,4 +164,5 @@
 Changelog заведён начиная с работ после версии 1.0.2.
 История до этого момента — в `git log` и в описаниях релизов на GitHub.
 
-[Unreleased]: https://github.com/MKultra6969/MK_DroidScreenCast/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/MKultra6969/MK_DroidScreenCast/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/MKultra6969/MK_DroidScreenCast/compare/v1.0.2...v2.0.0

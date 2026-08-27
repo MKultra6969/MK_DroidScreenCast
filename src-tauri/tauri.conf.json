@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/schema.json",
   "productName": "MK DroidScreenCast",
-  "version": "1.0.2",
+  "version": "2.0.0",
   "identifier": "com.mkdsc.app",
   "build": {
     "beforeDevCommand": "npm run tauri:dev",
@@ -31,7 +31,7 @@
       "endpoints": [
         "https://github.com/MKultra6969/MK_DroidScreenCast/releases/latest/download/latest.json"
       ],
-      "pubkey": ""
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDg0QkY4MDJDMDM3QjZEQjMKUldTemJYc0RMSUMvaEM0cHFPbzhxNGh5REFmVzltLzdFRHBPdEJGOEhSV0NxdjFCUVhhQXQ2ZGUK"
     }
   },
   "bundle": {

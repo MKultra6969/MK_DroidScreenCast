@@ -132,27 +132,32 @@ npm run tauri signer generate -- -w ~/.tauri/mkdsc.key
 Then:
 
 1. Put the **public** key into `src-tauri/tauri.conf.json` →
-   `plugins.updater.pubkey` (it is currently an empty placeholder).
+   `plugins.updater.pubkey`. It is already filled in for this repository;
+   replace it only when rotating the key, and remember that a new key
+   invalidates in-place updates for every install signed with the old one.
 2. Keep the **private** key secret. Losing it means existing installs can never
    be updated again.
 3. Export it before building a release — `.env` files are not read here:
 
    ```bash
    export TAURI_SIGNING_PRIVATE_KEY="$(cat ~/.tauri/mkdsc.key)"
-   export TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""
+   read -rs TAURI_SIGNING_PRIVATE_KEY_PASSWORD   # do not inline it: shells log their history
+   export TAURI_SIGNING_PRIVATE_KEY_PASSWORD
    ```
 
    ```powershell
    $env:TAURI_SIGNING_PRIVATE_KEY = Get-Content ~/.tauri/mkdsc.key -Raw
-   $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""
+   # Read-Host -AsSecureString keeps the password out of PSReadLine history.
+   $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringBSTR(
+     [Runtime.InteropServices.Marshal]::SecureStringToBSTR((Read-Host -AsSecureString "Key password")))
    ```
 
 4. For CI, store both as the repository secrets `TAURI_SIGNING_PRIVATE_KEY` and
    `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`; `.github/workflows/release.yml` picks
    them up and publishes `latest.json` alongside the installers.
 
-Until the public key is filled in, the app still works — "Check updates" just
-falls back to opening the GitHub release page instead of updating in place.
+A build without the key still runs — "Check updates" just falls back to opening
+the GitHub release page instead of updating in place.
 
 ## How updates reach users
 
