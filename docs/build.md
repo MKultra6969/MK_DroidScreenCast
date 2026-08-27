@@ -112,6 +112,49 @@ Install Tauri system dependencies for your distro (WebKit2GTK, GTK, and system t
 npm run tauri build
 ```
 
+### Alpine Linux (musl)
+
+Alpine needs its own build: the artifacts above link against glibc and will not
+start there at all. Build inside Alpine — cross-compiling from a glibc host does
+not work, because the app links the system WebKitGTK and only Alpine has a musl
+build of it.
+
+Use **Alpine 3.23 or newer**: it is the first stable branch carrying both a Rust
+new enough for edition 2024 (1.91) and `webkit2gtk-4.1`.
+
+```sh
+apk add --no-cache   build-base pkgconf git   webkit2gtk-4.1-dev libayatana-appindicator-dev librsvg   openssl-dev curl wget file   nodejs npm rust cargo
+
+npm --prefix frontend ci
+npm --prefix frontend run build
+cargo build --release --locked --manifest-path src-tauri/Cargo.toml
+```
+
+The result is `src-tauri/target/release/mkdsc-tauri`.
+
+Use Alpine's `rust` and `cargo` packages, not a rustup toolchain: Alpine patches
+Rust to link musl dynamically, while rustup's musl target defaults to
+`+crt-static` and then cannot link against the system GTK and WebKit.
+
+In a container, add a font package (`font-dejavu`) — Alpine images ship none,
+and the interface renders blank without one.
+
+**adb and scrcpy have to come from the system:**
+
+```sh
+apk add android-tools scrcpy
+```
+
+The downloader fetches Google's platform-tools and the upstream scrcpy release,
+both built against glibc: the checksum verifies, and the binary then refuses to
+run. Anything already on `PATH` is preferred over downloading (see
+`locate_adb`/`locate_scrcpy` in `src/tools.rs`), so installing the packages is
+enough — no environment variable is needed. Alpine's `scrcpy` is 4.1, the very
+version pinned in `install.rs`.
+
+There is no self-update on Alpine: only bundles are signed, and this target
+produces a bare executable.
+
 ### Minimum glibc
 
 Release artifacts are built on `ubuntu-22.04`, so they link against **glibc
