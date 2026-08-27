@@ -1,8 +1,8 @@
 name: Release
 
 # Builds signed desktop installers and publishes them together with the
-# latest.json feed that tauri-plugin-updater reads. Alongside the installers
-# each job attaches the bare executable, for people who do not want one.
+# latest.json feed that tauri-plugin-updater reads. The bare executables are
+# added afterwards by the Binaries workflow, which this one calls.
 #
 # Required repository secrets:
 #   TAURI_SIGNING_PRIVATE_KEY           - contents of the key from `tauri signer generate`
@@ -68,75 +68,17 @@ jobs:
           includeUpdaterJson: true
           args: ${{ matrix.args }}
 
-      # The installer is what most people want, but a bare executable is asked
-      # for often enough to publish it too. It is the same binary the installer
-      # ships, so it needs no extra build — only a name that says what it is.
-      # It is NOT self-contained: it links against the system WebKitGTK, and
-      # it cannot update itself, since only bundles are signed.
-      - name: Attach the unbundled executable
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          version=$(node -p "require('./src-tauri/tauri.conf.json').version")
-          if [ "${{ matrix.platform }}" = 'windows-latest' ]; then
-            cp src-tauri/target/release/mkdsc-tauri.exe "mkdsc-${version}-windows-x86_64.exe"
-            asset="mkdsc-${version}-windows-x86_64.exe"
-          else
-            cp src-tauri/target/release/mkdsc-tauri "mkdsc-${version}-linux-x86_64-glibc"
-            asset="mkdsc-${version}-linux-x86_64-glibc"
-          fi
-          gh release upload "v${version}" "$asset" --clobber
-
-  # Alpine builds separately: musl is a different libc, so the glibc artifacts
-  # above will not run there at all.
-  #
-  # The build happens inside `docker run`, not in a `container:` job. GitHub
-  # injects its own glibc-linked Node into container jobs to run actions like
-  # actions/checkout, and that Node cannot start on musl. Checking out on the
-  # host and mounting the directory sidesteps the whole problem.
-  alpine:
-    name: Alpine (musl) executable
-    # The draft release is created by the job above; uploading into it first
-    # would race with its creation.
+  # The bare executables live in their own workflow so that release.yml is not
+  # the only way to produce them: it can be dispatched by hand against an older
+  # release too.
+  binaries:
+    # Only on a tag push — the release tag comes from the ref, and a manual
+    # dispatch of this workflow has none. Run the Binaries workflow directly in
+    # that case, passing the tag.
+    if: startsWith(github.ref, 'refs/tags/')
     needs: publish
     permissions:
       contents: write
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-
-      # 3.23 rather than edge: it is a stable branch that already carries both
-      # things this build needs — rust 1.91 (the crate is edition 2024, so it
-      # needs at least 1.85) and webkit2gtk-4.1.
-      - name: Build the executable inside Alpine 3.23
-        run: |
-          docker run --rm -v "$PWD:/work" -w /work alpine:3.23 sh -eu -c '
-            # Alpine ships its own rust, patched to link musl dynamically.
-            # A rustup toolchain would default to +crt-static and then fail to
-            # link against the system GTK and WebKit at all.
-            apk add --no-cache \
-              build-base pkgconf git \
-              webkit2gtk-4.1-dev libayatana-appindicator-dev librsvg \
-              openssl-dev curl wget file \
-              nodejs npm rust cargo
-            npm --prefix frontend ci
-            npm --prefix frontend run build
-            # Plain cargo, not the Tauri CLI: the CLI ships as a prebuilt
-            # per-platform binary, and pulling the musl one through npm is one
-            # more thing to go wrong. `tauri build --no-bundle` does the same
-            # two steps this does, and build.rs still validates the ACL.
-            cargo build --release --locked --manifest-path src-tauri/Cargo.toml
-          '
-
-      - name: Attach it to the release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          version=$(node -p "require('./src-tauri/tauri.conf.json').version")
-          asset="mkdsc-${version}-linux-x86_64-musl"
-          # Built as root inside the container; make it readable and runnable.
-          sudo chmod a+rx src-tauri/target/release/mkdsc-tauri
-          cp src-tauri/target/release/mkdsc-tauri "$asset"
-          file "$asset"
-          gh release upload "v${version}" "$asset" --clobber
+    uses: ./.github/workflows/binaries.yml
+    with:
+      release_tag: ${{ github.ref_name }}

@@ -1,0 +1,123 @@
+name: Binaries
+
+# Builds the bare executables — no installer, no bundle — and attaches them to
+# a release.
+#
+# Two ways in. release.yml calls it once the installers exist, and it can be
+# dispatched by hand against any release, including ones tagged before this
+# workflow existed.
+#
+# What these are NOT: self-contained. They link against the system GTK and
+# WebKitGTK, and they cannot update themselves, because only bundles are signed.
+# AppImage remains the answer for "one file that just runs".
+
+on:
+  workflow_call:
+    inputs:
+      release_tag:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag to upload into, for example v2.0.0'
+        required: true
+        type: string
+
+jobs:
+  desktop:
+    name: ${{ matrix.asset }}
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            asset: windows-x86_64.exe
+            binary: mkdsc-tauri.exe
+          - platform: ubuntu-22.04
+            asset: linux-x86_64-glibc
+            binary: mkdsc-tauri
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.85'
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      # Plain cargo rather than the Tauri CLI: `tauri build --no-bundle` runs
+      # these same two steps, and skipping the CLI keeps this workflow free of
+      # the root package.json. build.rs still validates the capabilities.
+      - name: Build
+        shell: bash
+        run: |
+          npm --prefix frontend ci
+          npm --prefix frontend run build
+          cargo build --release --locked --manifest-path src-tauri/Cargo.toml
+
+      - name: Attach to ${{ inputs.release_tag }}
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          asset="mkdsc-${version}-${{ matrix.asset }}"
+          cp "src-tauri/target/release/${{ matrix.binary }}" "$asset"
+          gh release upload "${{ inputs.release_tag }}" "$asset" --clobber
+
+  musl:
+    name: linux-x86_64-musl
+    permissions:
+      contents: write
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      # `docker run`, not a `container:` job: GitHub injects a glibc-linked Node
+      # into container jobs to run actions like actions/checkout, and it cannot
+      # start on musl.
+      #
+      # Alpine 3.23 is the floor — the first stable branch with both a Rust new
+      # enough for edition 2024 (1.91) and webkit2gtk-4.1. Its own rust package
+      # is used rather than a rustup toolchain, which defaults to +crt-static
+      # and then fails to link the system GTK and WebKit.
+      - name: Build inside Alpine 3.23
+        run: |
+          docker run --rm -v "$PWD:/work" -w /work alpine:3.23 sh -eu -c '
+            apk add --no-cache \
+              build-base pkgconf git \
+              webkit2gtk-4.1-dev libayatana-appindicator-dev librsvg \
+              openssl-dev curl wget file \
+              nodejs npm rust cargo
+            npm --prefix frontend ci
+            npm --prefix frontend run build
+            cargo build --release --locked --manifest-path src-tauri/Cargo.toml
+          '
+
+      - name: Attach to ${{ inputs.release_tag }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          asset="mkdsc-${version}-linux-x86_64-musl"
+          # Built as root inside the container.
+          sudo chmod a+rx src-tauri/target/release/mkdsc-tauri
+          cp src-tauri/target/release/mkdsc-tauri "$asset"
+          file "$asset"
+          gh release upload "${{ inputs.release_tag }}" "$asset" --clobber
